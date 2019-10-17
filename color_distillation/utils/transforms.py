@@ -7,8 +7,7 @@ from torchvision.transforms import *
 class GridDownSample(object):
     """ Call PIL functions to first down-sample then up-sample
     Args:
-         reamin_prob: The ratio of remaining pixels after erasing.
-         blackout_color: Erasing value.
+         downsample: The area down sample ratio.
     """
 
     def __init__(self, downsample=1.0):
@@ -17,5 +16,5 @@ class GridDownSample(object):
     def __call__(self, img):
         H, W = img.size
         H_reduced, W_reduced = (np.array([H, W]) * self.hw_downsample).astype(int)
-        downsampled_img = img.resize((H_reduced, W_reduced), Image.NEAREST).resize((H, W), Image.NEAREST)
+        downsampled_img = img.resize((H_reduced, W_reduced), Image.NEAREST).resize((H, W), Image.LINEAR)
         return downsampled_img

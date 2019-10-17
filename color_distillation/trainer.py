@@ -12,21 +12,30 @@ class BaseTrainer(object):
 
 
 class CNNTrainer(BaseTrainer):
-    def __init__(self, model, criterion):
+    def __init__(self, model, criterion, pretrain_model=None):
         super(BaseTrainer, self).__init__()
         self.model = model
         self.criterion = criterion
+        self.pretrain_model = pretrain_model
+        if pretrain_model is not None:
+            self.has_pretrain = True
+        else:
+            self.has_pretrain = False
 
-    def train(self, epoch, data_loader, optimizer, log_interval=100, cyclic_scheduler=None, device=0):
+    def train(self, epoch, data_loader, optimizer, log_interval=100, cyclic_scheduler=None, ):
         self.model.train()
         losses = 0
         correct = 0
         miss = 0
         t0 = time.time()
         for batch_idx, (data, target) in enumerate(data_loader):
-            data, target = data.cuda(device), target.cuda(device)
+            data, target = data.cuda(), target.cuda()
             optimizer.zero_grad()
-            output = self.model(data)
+            if self.has_pretrain:
+                transformed_img = self.model(data)
+                output = self.pretrain_model(transformed_img)
+            else:
+                output = self.model(data)
             pred = torch.argmax(output, 1)
             correct += pred.eq(target).sum().item()
             miss += target.shape[0] - pred.eq(target).sum().item()
@@ -61,7 +70,11 @@ class CNNTrainer(BaseTrainer):
         for batch_idx, (data, target) in enumerate(test_loader):
             data, target = data.cuda(device), target.cuda(device)
             with torch.no_grad():
-                output = self.model(data)
+                if self.has_pretrain:
+                    transformed_img = self.model(data, training=False)
+                    output = self.pretrain_model(transformed_img)
+                else:
+                    output = self.model(data)
             pred = torch.argmax(output, 1)
             correct += pred.eq(target).sum().item()
             miss += target.shape[0] - pred.eq(target).sum().item()
