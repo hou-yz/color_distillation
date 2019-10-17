@@ -20,6 +20,7 @@ class CNNTrainer(BaseTrainer):
         self.pretrain_model = pretrain_model
         self.denormalizer = denormalizer
         self.coord_map = coord_map
+        self.mse_loss = nn.MSELoss()
         if pretrain_model is not None:
             self.has_pretrain = True
         else:
@@ -42,7 +43,10 @@ class CNNTrainer(BaseTrainer):
             pred = torch.argmax(output, 1)
             correct += pred.eq(target).sum().item()
             miss += target.shape[0] - pred.eq(target).sum().item()
-            loss = self.criterion(output, target)
+            if self.has_pretrain:
+                loss = self.criterion(output, target) + self.mse_loss(transformed_img, data)
+            else:
+                loss = self.criterion(output, target)
             loss.backward()
             optimizer.step()
             losses += loss.item()
@@ -88,7 +92,10 @@ class CNNTrainer(BaseTrainer):
             pred = torch.argmax(output, 1)
             correct += pred.eq(target).sum().item()
             miss += target.shape[0] - pred.eq(target).sum().item()
-            loss = self.criterion(output, target)
+            if self.has_pretrain:
+                loss = self.criterion(output, target) + self.mse_loss(transformed_img, data)
+            else:
+                loss = self.criterion(output, target)
             losses += loss.item()
 
         print('Test, Loss: {:.6f}, Prec: {:.1f}%'.format(losses / (len(test_loader) + 1),

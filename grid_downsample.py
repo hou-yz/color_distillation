@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torchvision import datasets
+from color_distillation import datasets
 import color_distillation.utils.transforms as T
 from color_distillation import models
 from color_distillation.trainer import CNNTrainer
@@ -32,6 +32,7 @@ def main():
     parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed (default: 1)')
     parser.add_argument('--log_interval', type=int, default=100, metavar='N',
                         help='how many batches to wait before logging training status')
+    parser.add_argument('--sample_type', type=str, default='kmeans', choices=['grid', 'kmeans'])
     parser.add_argument('--downsample', type=float, default=1.0, help='down sample ratio for area')
     args = parser.parse_args()
 
@@ -41,32 +42,52 @@ def main():
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
+    if args.dataset == 'mnist':
+        H, W, C = 28, 28, 1
+    elif args.dataset == 'cifar10':
+        H, W, C = 32, 32, 3
+    else:
+        raise Exception
+    if args.sample_type == 'grid':
+        sample_trans = [T.GridDownSample(args.downsample)]
+        num_colors = None
+    elif args.sample_type == 'kmeans':
+        sample_trans = []
+        num_colors = int(H * W * args.downsample)
+    else:
+        sample_trans = []
+        num_colors = None
+
     # dataset
     if args.dataset == 'mnist':
         in_channel = 1
 
-        sampled_train_trans = T.Compose([T.GridDownSample(args.downsample), T.ToTensor(),
-                                         T.Normalize((0.1307,), (0.3081,)), ])
+        sampled_train_trans = T.Compose(sample_trans + [T.ToTensor(), T.Normalize((0.1307,), (0.3081,)), ])
         og_test_trans = T.Compose([T.ToTensor(), T.Normalize((0.1307,), (0.3081,)), ])
-        sampled_test_trans = T.Compose([T.GridDownSample(args.downsample), T.ToTensor(),
-                                        T.Normalize((0.1307,), (0.3081,)), ])
+        sampled_test_trans = T.Compose(sample_trans + [T.ToTensor(), T.Normalize((0.1307,), (0.3081,)), ])
 
-        sampled_train_set = datasets.MNIST('./data', train=True, download=True, transform=sampled_train_trans)
+        sampled_train_set = datasets.MNIST('./data', train=True, download=True, transform=sampled_train_trans,
+                                           num_colors=num_colors)
         og_test_set = datasets.MNIST('./data', train=False, download=True, transform=og_test_trans)
-        sampled_test_set = datasets.MNIST('./data', train=False, download=True, transform=sampled_test_trans)
+        sampled_test_set = datasets.MNIST('./data', train=False, download=True, transform=sampled_test_trans,
+                                          num_colors=num_colors)
     elif args.dataset == 'cifar10':
         in_channel = 3
 
-        sampled_train_trans = T.Compose([T.GridDownSample(args.downsample), T.RandomCrop(32, padding=4),
-                                         T.RandomHorizontalFlip(), T.ToTensor(),
-                                         T.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)), ])
+        sampled_train_trans = T.Compose(sample_trans + [T.RandomCrop(32, padding=4),
+                                                        T.RandomHorizontalFlip(), T.ToTensor(),
+                                                        T.Normalize((0.4914, 0.4822, 0.4465),
+                                                                    (0.2023, 0.1994, 0.2010)), ])
         og_test_trans = T.Compose([T.ToTensor(), T.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)), ])
-        sampled_test_trans = T.Compose([T.GridDownSample(args.downsample), T.ToTensor(),
-                                        T.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)), ])
+        sampled_test_trans = T.Compose(sample_trans + [T.ToTensor(),
+                                                       T.Normalize((0.4914, 0.4822, 0.4465),
+                                                                   (0.2023, 0.1994, 0.2010)), ])
 
-        sampled_train_set = datasets.CIFAR10(root='./data', train=True, download=True, transform=sampled_train_trans)
+        sampled_train_set = datasets.CIFAR10(root='./data', train=True, download=True, transform=sampled_train_trans,
+                                             num_colors=num_colors)
         og_test_set = datasets.CIFAR10(root='./data', train=False, download=True, transform=og_test_trans)
-        sampled_test_set = datasets.CIFAR10(root='./data', train=False, download=True, transform=sampled_test_trans)
+        sampled_test_set = datasets.CIFAR10(root='./data', train=False, download=True, transform=sampled_test_trans,
+                                            num_colors=num_colors)
     else:
         raise Exception
 
