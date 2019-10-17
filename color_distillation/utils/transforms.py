@@ -18,3 +18,4 @@ class GridDownSample(object):
         H_reduced, W_reduced = (np.array([H, W]) * self.hw_downsample).astype(int)
         downsampled_img = img.resize((H_reduced, W_reduced), Image.NEAREST).resize((H, W), Image.LINEAR)
         return downsampled_img
+

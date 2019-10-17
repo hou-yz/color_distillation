@@ -1,7 +1,8 @@
 import time
-import torch
 import copy
+import matplotlib.pyplot as plt
 import numpy as np
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -12,11 +13,13 @@ class BaseTrainer(object):
 
 
 class CNNTrainer(BaseTrainer):
-    def __init__(self, model, criterion, pretrain_model=None):
+    def __init__(self, model, criterion, pretrain_model=None, denormalizer=None, coord_map=None):
         super(BaseTrainer, self).__init__()
         self.model = model
         self.criterion = criterion
         self.pretrain_model = pretrain_model
+        self.denormalizer = denormalizer
+        self.coord_map = coord_map
         if pretrain_model is not None:
             self.has_pretrain = True
         else:
@@ -32,7 +35,7 @@ class CNNTrainer(BaseTrainer):
             data, target = data.cuda(), target.cuda()
             optimizer.zero_grad()
             if self.has_pretrain:
-                transformed_img = self.model(data)
+                transformed_img = self.model(data, self.coord_map)
                 output = self.pretrain_model(transformed_img)
             else:
                 output = self.model(data)
@@ -71,8 +74,15 @@ class CNNTrainer(BaseTrainer):
             data, target = data.cuda(device), target.cuda(device)
             with torch.no_grad():
                 if self.has_pretrain:
-                    transformed_img = self.model(data, training=False)
+                    transformed_img = self.model(data, self.coord_map, training=False)
                     output = self.pretrain_model(transformed_img)
+                    # plotting
+                    # og_img = self.denormalizer(data[0]).cpu().numpy()
+                    # plt.imshow(og_img.reshape([3, 32, 32]).transpose([1, 2, 0]))
+                    # plt.show()
+                    # downsampled_img = self.denormalizer(transformed_img[0]).cpu().numpy()
+                    # plt.imshow(downsampled_img.reshape([3, 32, 32]).transpose([1, 2, 0]))
+                    # plt.show()
                 else:
                     output = self.model(data)
             pred = torch.argmax(output, 1)

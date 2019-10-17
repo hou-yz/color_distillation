@@ -3,19 +3,20 @@ import torch
 import torch.nn as nn
 import torch.functional as F
 from color_distillation.models.dncnn import DnCNN
+from color_distillation.models.unet import UNet
 
 
 class ColorCNN(nn.Module):
     def __init__(self, in_channel, num_colors):
         super().__init__()
         self.num_colors = num_colors
-        self.base = DnCNN(in_channel, num_of_layers=5, feature_dim=64)
+        self.base = UNet(in_channel + 3)
         self.color_mask = nn.Sequential(nn.Conv2d(self.base.out_channel, 512, 1), nn.ReLU(),
                                         nn.Conv2d(512, num_colors, 1))
         self.mask_softmax = nn.Softmax2d()
 
-    def forward(self, img, training=True):
-        feat = self.base(img)
+    def forward(self, img, coord_map, training=True):
+        feat = self.base(torch.cat([img, coord_map.repeat([img.shape[0], 1, 1, 1])], dim=1))
         mask = self.color_mask(feat)
         mask = self.mask_softmax(mask * 10)
         argmax_mask = torch.argmax(mask, dim=1, keepdim=True)

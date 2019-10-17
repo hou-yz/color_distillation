@@ -15,6 +15,7 @@ from color_distillation.models.color_cnn import ColorCNN
 from color_distillation.trainer import CNNTrainer
 from color_distillation.utils.draw_curve import draw_curve
 from color_distillation.utils.logging import Logger
+from color_distillation.utils.image_utils import img_color_denormalize, create_coord_map
 
 
 def main():
@@ -47,6 +48,7 @@ def main():
 
         train_trans = T.Compose([T.ToTensor(), T.Normalize((0.1307,), (0.3081,)), ])
         test_trans = T.Compose([T.ToTensor(), T.Normalize((0.1307,), (0.3081,)), ])
+        denormalizer = img_color_denormalize((0.1307,), (0.3081,))
 
         train_set = datasets.MNIST('./data', train=True, download=True, transform=train_trans)
         test_set = datasets.MNIST('./data', train=False, download=True, transform=test_trans)
@@ -56,6 +58,7 @@ def main():
         train_trans = T.Compose([T.RandomCrop(32, padding=4), T.RandomHorizontalFlip(), T.ToTensor(),
                                  T.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)), ])
         test_trans = T.Compose([T.ToTensor(), T.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)), ])
+        denormalizer = img_color_denormalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
 
         train_set = datasets.CIFAR10(root='./data', train=True, download=True, transform=train_trans)
         test_set = datasets.CIFAR10(root='./data', train=False, download=True, transform=test_trans)
@@ -86,6 +89,8 @@ def main():
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 40, 2)
 
+    coord_map = create_coord_map([H, W, C], True).cuda()
+
     # draw curve
     x_epoch = []
     train_loss_s = []
@@ -93,7 +98,7 @@ def main():
     og_test_loss_s = []
     og_test_prec_s = []
 
-    trainer = CNNTrainer(model, nn.CrossEntropyLoss(), pretrain_cnn)
+    trainer = CNNTrainer(model, nn.CrossEntropyLoss(), pretrain_cnn, denormalizer, coord_map)
 
     # learn
     print('Testing...')
