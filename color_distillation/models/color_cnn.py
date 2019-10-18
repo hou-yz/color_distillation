@@ -28,7 +28,11 @@ class ColorCNN(nn.Module):
             weighted_color = (img.unsqueeze(2) * argmax_mask.unsqueeze(1)).mean(dim=[3, 4], keepdim=True)
             transformed_img = (argmax_mask.unsqueeze(1) * weighted_color).sum(dim=2)
 
-        return transformed_img
+        # regularization
+        B, C, H, W = img.shape
+        regularization, _ = torch.max(mask.view([B, self.num_colors, -1]), dim=2)
+        regularization = torch.mean(regularization)
+        return transformed_img, regularization
 
 
 if __name__ == '__main__':

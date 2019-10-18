@@ -32,7 +32,7 @@ def main():
     parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed (default: 1)')
     parser.add_argument('--log_interval', type=int, default=100, metavar='N',
                         help='how many batches to wait before logging training status')
-    parser.add_argument('--sample_type', type=str, default='kmeans', choices=['grid', 'kmeans'])
+    parser.add_argument('--sample_type', type=str, default='grid', choices=['grid', 'kmeans'])
     parser.add_argument('--downsample', type=float, default=1.0, help='down sample ratio for area')
     args = parser.parse_args()
 

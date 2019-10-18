@@ -3,6 +3,8 @@ import os
 os.environ['OMP_NUM_THREADS'] = '1'
 import argparse
 import sys
+import shutil
+from distutils.dir_util import copy_tree
 import datetime
 import numpy as np
 import torch
@@ -73,6 +75,11 @@ def main():
     logdir = 'logs/colorcnn/{}/{}/downsample{}/{}'.format(args.dataset, args.arch, args.downsample,
                                                           datetime.datetime.today().strftime('%Y-%m-%d_%H-%M-%S'))
     os.makedirs(logdir, exist_ok=True)
+    copy_tree('./color_distillation', logdir + '/scripts/color_distillation')
+    for script in os.listdir('.'):
+        if script.split('.')[-1] == 'py':
+            dst_file = os.path.join(logdir, 'scripts', os.path.basename(script))
+            shutil.copyfile(script, dst_file)
     sys.stdout = Logger(os.path.join(logdir, 'log.txt'), )
     print('Settings:')
     print(vars(args))

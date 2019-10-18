@@ -36,7 +36,7 @@ class CNNTrainer(BaseTrainer):
             data, target = data.cuda(), target.cuda()
             optimizer.zero_grad()
             if self.has_pretrain:
-                transformed_img = self.model(data, self.coord_map)
+                transformed_img, regularization = self.model(data, self.coord_map)
                 output = self.pretrain_model(transformed_img)
             else:
                 output = self.model(data)
@@ -44,7 +44,7 @@ class CNNTrainer(BaseTrainer):
             correct += pred.eq(target).sum().item()
             miss += target.shape[0] - pred.eq(target).sum().item()
             if self.has_pretrain:
-                loss = self.criterion(output, target) + self.mse_loss(transformed_img, data)
+                loss = self.criterion(output, target) - regularization
             else:
                 loss = self.criterion(output, target)
             loss.backward()
@@ -78,7 +78,7 @@ class CNNTrainer(BaseTrainer):
             data, target = data.cuda(device), target.cuda(device)
             with torch.no_grad():
                 if self.has_pretrain:
-                    transformed_img = self.model(data, self.coord_map, training=False)
+                    transformed_img, regularization = self.model(data, self.coord_map, training=False)
                     output = self.pretrain_model(transformed_img)
                     # plotting
                     # og_img = self.denormalizer(data[0]).cpu().numpy()
@@ -93,7 +93,7 @@ class CNNTrainer(BaseTrainer):
             correct += pred.eq(target).sum().item()
             miss += target.shape[0] - pred.eq(target).sum().item()
             if self.has_pretrain:
-                loss = self.criterion(output, target) + self.mse_loss(transformed_img, data)
+                loss = self.criterion(output, target) - regularization
             else:
                 loss = self.criterion(output, target)
             losses += loss.item()
