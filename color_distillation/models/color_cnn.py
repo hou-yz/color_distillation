@@ -30,9 +30,10 @@ class ColorCNN(nn.Module):
 
         # regularization
         B, C, H, W = img.shape
-        regularization, _ = torch.max(mask.view([B, self.num_colors, -1]), dim=2)
-        regularization = torch.mean(regularization)
-        return transformed_img, regularization
+        mean_max, _ = torch.max(mask.view([B, self.num_colors, -1]), dim=2)
+        mean_max = torch.mean(mean_max)
+        std_mean = torch.mean(torch.mean(mask, dim=[2, 3]).std(dim=1))
+        return transformed_img, mean_max, std_mean
 
 
 if __name__ == '__main__':

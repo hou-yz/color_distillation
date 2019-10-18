@@ -19,7 +19,7 @@ def main():
     # settings
     parser = argparse.ArgumentParser(description='Grid-wise down sample')
     parser.add_argument('--train', action='store_true', default=False)
-    parser.add_argument('-d', '--dataset', type=str, default='mnist', choices=['mnist', 'cifar10'])
+    parser.add_argument('-d', '--dataset', type=str, default='cifar10', choices=['mnist', 'cifar10'])
     parser.add_argument('-a', '--arch', type=str, default='vgg16', choices=models.names())
     parser.add_argument('-j', '--num_workers', type=int, default=4)
     parser.add_argument('-b', '--batch_size', type=int, default=128, metavar='N',

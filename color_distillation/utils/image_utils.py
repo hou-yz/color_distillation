@@ -4,8 +4,6 @@ import numpy as np
 import torch
 from PIL import Image
 import matplotlib.pyplot as plt
-from tsnecuda import TSNE
-import seaborn as sns
 
 
 class img_color_denormalize(object):
