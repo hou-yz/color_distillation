@@ -18,7 +18,7 @@ class ColorCNN(nn.Module):
     def forward(self, img, coord_map, training=True):
         feat = self.base(torch.cat([img, coord_map.repeat([img.shape[0], 1, 1, 1])], dim=1))
         mask = self.color_mask(feat)
-        mask = self.mask_softmax(mask * 10)
+        mask = self.mask_softmax(mask)
         argmax_mask = torch.argmax(mask, dim=1, keepdim=True)
         argmax_mask = torch.zeros_like(mask).scatter(1, argmax_mask, 1)
         if training:

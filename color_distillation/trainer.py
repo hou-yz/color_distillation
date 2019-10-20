@@ -79,6 +79,7 @@ class CNNTrainer(BaseTrainer):
             with torch.no_grad():
                 if self.has_pretrain:
                     transformed_img, mean_max, std_mean = self.model(data, self.coord_map, training=False)
+                    # transformed_img, mean_max, std_mean = self.model(data, self.coord_map)
                     output = self.pretrain_model(transformed_img)
                     # # plotting
                     # og_img = self.denormalizer(data[0]).cpu().numpy()

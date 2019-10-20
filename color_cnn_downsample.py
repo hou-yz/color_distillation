@@ -94,7 +94,9 @@ def main():
 
     model = ColorCNN(C, int(H * W * args.downsample)).cuda()
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 40, 2)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 40, 2, eta_min=1e-4)
+    # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr,
+    #                                                 steps_per_epoch=len(train_loader), epochs=args.epochs)
 
     coord_map = create_coord_map([H, W, C], True).cuda()
 

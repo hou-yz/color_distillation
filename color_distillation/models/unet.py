@@ -100,7 +100,6 @@ class UNet(nn.Module):
         self.up3 = up(256, 64)
         self.up4 = up(128, 64)
         self.out_channel = 64
-        self.hidden_channel = 512
 
     def forward(self, x):
         x1 = self.inc(x)
