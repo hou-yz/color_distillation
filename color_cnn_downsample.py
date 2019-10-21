@@ -29,13 +29,13 @@ def main():
     parser.add_argument('-b', '--batch_size', type=int, default=64, metavar='N',
                         help='input batch size for training (default: 64)')
     parser.add_argument('--epochs', type=int, default=120, metavar='N', help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=1e-2, metavar='LR', help='learning rate (default: 0.1)')
+    parser.add_argument('--lr', type=float, default=1.5e-2, metavar='LR', help='learning rate (default: 0.1)')
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
-    parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed (default: 1)')
     parser.add_argument('--log_interval', type=int, default=100, metavar='N',
                         help='how many batches to wait before logging training status')
     parser.add_argument('--downsample', type=float, default=1.0)
+    parser.add_argument('--resume', type=str, default=None)
     args = parser.parse_args()
 
     # seed
@@ -74,13 +74,14 @@ def main():
 
     logdir = 'logs/colorcnn/{}/{}/downsample{}/{}'.format(args.dataset, args.arch, args.downsample,
                                                           datetime.datetime.today().strftime('%Y-%m-%d_%H-%M-%S'))
-    os.makedirs(logdir, exist_ok=True)
-    copy_tree('./color_distillation', logdir + '/scripts/color_distillation')
-    for script in os.listdir('.'):
-        if script.split('.')[-1] == 'py':
-            dst_file = os.path.join(logdir, 'scripts', os.path.basename(script))
-            shutil.copyfile(script, dst_file)
-    sys.stdout = Logger(os.path.join(logdir, 'log.txt'), )
+    if args.resume is None:
+        os.makedirs(logdir, exist_ok=True)
+        copy_tree('./color_distillation', logdir + '/scripts/color_distillation')
+        for script in os.listdir('.'):
+            if script.split('.')[-1] == 'py':
+                dst_file = os.path.join(logdir, 'scripts', os.path.basename(script))
+                shutil.copyfile(script, dst_file)
+        sys.stdout = Logger(os.path.join(logdir, 'log.txt'), )
     print('Settings:')
     print(vars(args))
 
@@ -94,7 +95,7 @@ def main():
 
     model = ColorCNN(C, int(H * W * args.downsample)).cuda()
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 40, 2, eta_min=1e-4)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 40, 2)
     # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr,
     #                                                 steps_per_epoch=len(train_loader), epochs=args.epochs)
 
@@ -110,24 +111,32 @@ def main():
     trainer = CNNTrainer(model, nn.CrossEntropyLoss(), pretrain_cnn, denormalizer, coord_map)
 
     # learn
-    print('Testing...')
-    trainer.test(test_loader)
-
-    for epoch in range(1, args.epochs + 1):
-        print('Training...')
-        train_loss, train_prec = trainer.train(epoch, train_loader, optimizer, args.log_interval, scheduler)
+    if args.resume is None:
         print('Testing...')
-        og_test_loss, og_test_prec = trainer.test(test_loader)
+        trainer.test(test_loader)
 
-        x_epoch.append(epoch)
-        train_loss_s.append(train_loss)
-        train_prec_s.append(train_prec)
-        og_test_loss_s.append(og_test_loss)
-        og_test_prec_s.append(og_test_prec)
-        draw_curve(os.path.join(logdir, 'learning_curve.jpg'), x_epoch, train_loss_s, train_prec_s,
-                   og_test_loss_s, og_test_prec_s)
-    # save
-    torch.save(model.state_dict(), os.path.join(logdir, 'ColorCNN.pth'))
+        for epoch in range(1, args.epochs + 1):
+            print('Training...')
+            train_loss, train_prec = trainer.train(epoch, train_loader, optimizer, args.log_interval, scheduler)
+            print('Testing...')
+            og_test_loss, og_test_prec = trainer.test(test_loader)
+
+            x_epoch.append(epoch)
+            train_loss_s.append(train_loss)
+            train_prec_s.append(train_prec)
+            og_test_loss_s.append(og_test_loss)
+            og_test_prec_s.append(og_test_prec)
+            draw_curve(os.path.join(logdir, 'learning_curve.jpg'), x_epoch, train_loss_s, train_prec_s,
+                       og_test_loss_s, og_test_prec_s)
+        # save
+        torch.save(model.state_dict(), os.path.join(logdir, 'ColorCNN.pth'))
+    else:
+        logdir = 'logs/colorcnn/{}/{}/downsample{}/'.format(args.dataset, args.arch, args.downsample, ) + args.resume
+        pretrain_dir = logdir + '/ColorCNN.pth'
+        model.load_state_dict(torch.load(pretrain_dir))
+        model.eval()
+        print('Test loaded model...')
+        trainer.test(test_loader)
 
 
 if __name__ == '__main__':
