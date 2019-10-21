@@ -19,11 +19,11 @@ def main():
     # settings
     parser = argparse.ArgumentParser(description='Grid-wise down sample')
     parser.add_argument('--train', action='store_true', default=False)
-    parser.add_argument('-d', '--dataset', type=str, default='cifar10', choices=['mnist', 'cifar10'])
+    parser.add_argument('-d', '--dataset', type=str, default='cifar10')
     parser.add_argument('-a', '--arch', type=str, default='vgg16', choices=models.names())
     parser.add_argument('-j', '--num_workers', type=int, default=4)
     parser.add_argument('-b', '--batch_size', type=int, default=128, metavar='N',
-                        help='input batch size for training (default: 64)')
+                        help='input batch size for training (default: 128)')
     parser.add_argument('--epochs', type=int, default=20, metavar='N', help='number of epochs to train (default: 10)')
     parser.add_argument('--lr', type=float, default=0.1, metavar='LR', help='learning rate (default: 0.1)')
     parser.add_argument('--step_size', type=int, default=40)
@@ -42,8 +42,8 @@ def main():
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-    if args.dataset == 'mnist':
-        H, W, C = 28, 28, 1
+    if args.dataset == 'svhn':
+        H, W, C = 32, 32, 3
     elif args.dataset == 'cifar10':
         H, W, C = 32, 32, 3
     else:
@@ -59,20 +59,20 @@ def main():
         num_colors = None
 
     # dataset
-    if args.dataset == 'mnist':
-        in_channel = 1
+    if args.dataset == 'svhn':
+        num_class = 10
 
-        sampled_train_trans = T.Compose(sample_trans + [T.ToTensor(), T.Normalize((0.1307,), (0.3081,)), ])
-        og_test_trans = T.Compose([T.ToTensor(), T.Normalize((0.1307,), (0.3081,)), ])
-        sampled_test_trans = T.Compose(sample_trans + [T.ToTensor(), T.Normalize((0.1307,), (0.3081,)), ])
+        sampled_train_trans = T.Compose(sample_trans + [T.ToTensor(), T.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)), ])
+        og_test_trans = T.Compose([T.ToTensor(), T.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)), ])
+        sampled_test_trans = T.Compose(sample_trans + [T.ToTensor(), T.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)), ])
 
-        sampled_train_set = datasets.MNIST('./data', train=True, download=True, transform=sampled_train_trans,
-                                           num_colors=num_colors)
-        og_test_set = datasets.MNIST('./data', train=False, download=True, transform=og_test_trans)
-        sampled_test_set = datasets.MNIST('./data', train=False, download=True, transform=sampled_test_trans,
+        sampled_train_set = datasets.SVHN('./data', split='train', download=True, transform=sampled_train_trans,
                                           num_colors=num_colors)
+        og_test_set = datasets.SVHN('./data', split='test', download=True, transform=og_test_trans)
+        sampled_test_set = datasets.SVHN('./data', split='test', download=True, transform=sampled_test_trans,
+                                         num_colors=num_colors)
     elif args.dataset == 'cifar10':
-        in_channel = 3
+        num_class = 10
 
         sampled_train_trans = T.Compose(sample_trans + [T.RandomCrop(32, padding=4),
                                                         T.RandomHorizontalFlip(), T.ToTensor(),
@@ -106,7 +106,7 @@ def main():
     print(vars(args))
 
     # model
-    model = models.create(args.arch, in_channel, 10).cuda()
+    model = models.create(args.arch, C, num_class).cuda()
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     # scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 10, 1, 0.01)
     scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr,

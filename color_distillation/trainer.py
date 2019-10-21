@@ -13,18 +13,18 @@ class BaseTrainer(object):
 
 
 class CNNTrainer(BaseTrainer):
-    def __init__(self, model, criterion, pretrain_model=None, denormalizer=None, coord_map=None):
+    def __init__(self, model, criterion, classifier=None, denormalizer=None, coord_map=None):
         super(BaseTrainer, self).__init__()
         self.model = model
         self.criterion = criterion
-        self.pretrain_model = pretrain_model
+        self.classifier = classifier
         self.denormalizer = denormalizer
         self.coord_map = coord_map
         self.mse_loss = nn.MSELoss()
-        if pretrain_model is not None:
-            self.has_pretrain = True
+        if classifier is not None:
+            self.color_cnn = True
         else:
-            self.has_pretrain = False
+            self.color_cnn = False
 
     def train(self, epoch, data_loader, optimizer, log_interval=100, cyclic_scheduler=None, ):
         self.model.train()
@@ -35,15 +35,15 @@ class CNNTrainer(BaseTrainer):
         for batch_idx, (data, target) in enumerate(data_loader):
             data, target = data.cuda(), target.cuda()
             optimizer.zero_grad()
-            if self.has_pretrain:
+            if self.color_cnn:
                 transformed_img, mean_max, std_mean = self.model(data, self.coord_map)
-                output = self.pretrain_model(transformed_img)
+                output = self.classifier(transformed_img)
             else:
                 output = self.model(data)
             pred = torch.argmax(output, 1)
             correct += pred.eq(target).sum().item()
             miss += target.shape[0] - pred.eq(target).sum().item()
-            if self.has_pretrain:
+            if self.color_cnn:
                 loss = self.criterion(output, target) - mean_max + std_mean
             else:
                 loss = self.criterion(output, target)
@@ -77,10 +77,10 @@ class CNNTrainer(BaseTrainer):
         for batch_idx, (data, target) in enumerate(test_loader):
             data, target = data.cuda(device), target.cuda(device)
             with torch.no_grad():
-                if self.has_pretrain:
+                if self.color_cnn:
                     transformed_img, mean_max, std_mean = self.model(data, self.coord_map, training=False)
                     # transformed_img, mean_max, std_mean = self.model(data, self.coord_map)
-                    output = self.pretrain_model(transformed_img)
+                    output = self.classifier(transformed_img)
                     # # plotting
                     # og_img = self.denormalizer(data[0]).cpu().numpy()
                     # plt.imshow(og_img.reshape([3, 32, 32]).transpose([1, 2, 0]))
@@ -93,7 +93,7 @@ class CNNTrainer(BaseTrainer):
             pred = torch.argmax(output, 1)
             correct += pred.eq(target).sum().item()
             miss += target.shape[0] - pred.eq(target).sum().item()
-            if self.has_pretrain:
+            if self.color_cnn:
                 loss = self.criterion(output, target) - mean_max + std_mean
             else:
                 loss = self.criterion(output, target)

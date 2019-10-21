@@ -23,19 +23,20 @@ from color_distillation.utils.image_utils import img_color_denormalize, create_c
 def main():
     # settings
     parser = argparse.ArgumentParser(description='ColorCNN down sample')
-    parser.add_argument('-d', '--dataset', type=str, default='cifar10', choices=['mnist', 'cifar10'])
+    parser.add_argument('-d', '--dataset', type=str, default='cifar10')
     parser.add_argument('-a', '--arch', type=str, default='vgg16', choices=models.names())
     parser.add_argument('-j', '--num_workers', type=int, default=4)
-    parser.add_argument('-b', '--batch_size', type=int, default=64, metavar='N',
-                        help='input batch size for training (default: 64)')
+    parser.add_argument('-b', '--batch_size', type=int, default=128, metavar='N',
+                        help='input batch size for training (default: 128)')
     parser.add_argument('--epochs', type=int, default=120, metavar='N', help='number of epochs to train (default: 10)')
-    parser.add_argument('--lr', type=float, default=1.5e-2, metavar='LR', help='learning rate (default: 0.1)')
+    parser.add_argument('--lr', type=float, default=3e-2, metavar='LR', help='learning rate (default: 0.1)')
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
     parser.add_argument('--log_interval', type=int, default=100, metavar='N',
                         help='how many batches to wait before logging training status')
     parser.add_argument('--downsample', type=float, default=1.0)
     parser.add_argument('--resume', type=str, default=None)
+    parser.add_argument('--train_classifier', type=bool, default=False)
     args = parser.parse_args()
 
     # seed
@@ -45,24 +46,26 @@ def main():
     torch.backends.cudnn.benchmark = False
 
     # dataset
-    if args.dataset == 'mnist':
-        H, W, C = 28, 28, 1
+    if args.dataset == 'svhn':
+        H, W, C = 32, 32, 3
+        num_class = 10
 
-        train_trans = T.Compose([T.ToTensor(), T.Normalize((0.1307,), (0.3081,)), ])
-        test_trans = T.Compose([T.ToTensor(), T.Normalize((0.1307,), (0.3081,)), ])
-        denormalizer = img_color_denormalize((0.1307,), (0.3081,))
+        train_trans = T.Compose([T.ToTensor(), T.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)), ])
+        test_trans = T.Compose([T.ToTensor(), T.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)), ])
+        denormalizer = img_color_denormalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 
-        train_set = datasets.MNIST('./data', train=True, download=True, transform=train_trans)
-        test_set = datasets.MNIST('./data', train=False, download=True, transform=test_trans)
+        train_set = datasets.SVHN('./data', split='train', download=True, transform=test_trans)
+        test_set = datasets.SVHN('./data', split='test', download=True, transform=test_trans)
     elif args.dataset == 'cifar10':
         H, W, C = 32, 32, 3
+        num_class = 10
 
         train_trans = T.Compose([T.RandomCrop(32, padding=4), T.RandomHorizontalFlip(), T.ToTensor(),
                                  T.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)), ])
         test_trans = T.Compose([T.ToTensor(), T.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)), ])
         denormalizer = img_color_denormalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
 
-        train_set = datasets.CIFAR10(root='./data', train=True, download=True, transform=train_trans)
+        train_set = datasets.CIFAR10(root='./data', train=True, download=True, transform=test_trans)
         test_set = datasets.CIFAR10(root='./data', train=False, download=True, transform=test_trans)
     else:
         raise Exception
@@ -86,12 +89,13 @@ def main():
     print(vars(args))
 
     # model
-    pretrain_cnn = models.create(args.arch, C, 10).cuda()
-    pretrain_dir = 'logs/grid/{}/{}/downsample1.0'.format(args.dataset, args.arch) + '/model.pth'
-    pretrain_cnn.load_state_dict(torch.load(pretrain_dir))
-    pretrain_cnn.eval()
-    for param in pretrain_cnn.parameters():
-        param.requires_grad = False
+    classifier = models.create(args.arch, C, num_class).cuda()
+    if not args.train_classifier:
+        classifier_dir = 'logs/grid/{}/{}/downsample1.0'.format(args.dataset, args.arch) + '/model.pth'
+        classifier.load_state_dict(torch.load(classifier_dir))
+        classifier.eval()
+        for param in classifier.parameters():
+            param.requires_grad = False
 
     model = ColorCNN(C, int(H * W * args.downsample)).cuda()
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
@@ -108,7 +112,7 @@ def main():
     og_test_loss_s = []
     og_test_prec_s = []
 
-    trainer = CNNTrainer(model, nn.CrossEntropyLoss(), pretrain_cnn, denormalizer, coord_map)
+    trainer = CNNTrainer(model, nn.CrossEntropyLoss(), classifier, denormalizer, coord_map)
 
     # learn
     if args.resume is None:
@@ -132,8 +136,8 @@ def main():
         torch.save(model.state_dict(), os.path.join(logdir, 'ColorCNN.pth'))
     else:
         logdir = 'logs/colorcnn/{}/{}/downsample{}/'.format(args.dataset, args.arch, args.downsample, ) + args.resume
-        pretrain_dir = logdir + '/ColorCNN.pth'
-        model.load_state_dict(torch.load(pretrain_dir))
+        classifier_dir = logdir + '/ColorCNN.pth'
+        model.load_state_dict(torch.load(classifier_dir))
         model.eval()
         print('Test loaded model...')
         trainer.test(test_loader)
