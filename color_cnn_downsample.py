@@ -13,6 +13,7 @@ import torch.optim as optim
 from torchvision import datasets
 import color_distillation.utils.transforms as T
 from color_distillation import models
+from color_distillation.loss.label_smooth import LSR_loss
 from color_distillation.models.color_cnn import ColorCNN
 from color_distillation.trainer import CNNTrainer
 from color_distillation.utils.draw_curve import draw_curve
@@ -36,7 +37,8 @@ def main():
                         help='how many batches to wait before logging training status')
     parser.add_argument('--downsample', type=float, default=1.0)
     parser.add_argument('--resume', type=str, default=None)
-    parser.add_argument('--train_classifier', type=bool, default=False)
+    parser.add_argument('--train_classifier', action='store_true')
+    parser.add_argument('--label_smooth', type=float, default=0.0)
     args = parser.parse_args()
 
     # seed
@@ -103,6 +105,12 @@ def main():
     # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr,
     #                                                 steps_per_epoch=len(train_loader), epochs=args.epochs)
 
+    # loss
+    if args.label_smooth:
+        criterion = LSR_loss(args.label_smooth)
+    else:
+        criterion = nn.CrossEntropyLoss()
+
     coord_map = create_coord_map([H, W, C], True).cuda()
 
     # draw curve
@@ -112,7 +120,7 @@ def main():
     og_test_loss_s = []
     og_test_prec_s = []
 
-    trainer = CNNTrainer(model, nn.CrossEntropyLoss(), classifier, denormalizer, coord_map)
+    trainer = CNNTrainer(model, criterion, classifier, denormalizer, coord_map)
 
     # learn
     if args.resume is None:
