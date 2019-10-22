@@ -48,6 +48,7 @@ def main():
     torch.backends.cudnn.benchmark = False
 
     # dataset
+    data_path = os.path.expanduser('~/Data')
     if args.dataset == 'svhn':
         H, W, C = 32, 32, 3
         num_class = 10
@@ -56,8 +57,8 @@ def main():
         test_trans = T.Compose([T.ToTensor(), T.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)), ])
         denormalizer = img_color_denormalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 
-        train_set = datasets.SVHN('./data', split='train', download=True, transform=test_trans)
-        test_set = datasets.SVHN('./data', split='test', download=True, transform=test_trans)
+        train_set = datasets.SVHN(data_path, split='train', download=True, transform=train_trans)
+        test_set = datasets.SVHN(data_path, split='test', download=True, transform=test_trans)
     elif args.dataset == 'cifar10':
         H, W, C = 32, 32, 3
         num_class = 10
@@ -67,8 +68,8 @@ def main():
         test_trans = T.Compose([T.ToTensor(), T.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)), ])
         denormalizer = img_color_denormalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
 
-        train_set = datasets.CIFAR10(root='./data', train=True, download=True, transform=test_trans)
-        test_set = datasets.CIFAR10(root='./data', train=False, download=True, transform=test_trans)
+        train_set = datasets.CIFAR10(data_path, train=True, download=True, transform=train_trans)
+        test_set = datasets.CIFAR10(data_path, train=False, download=True, transform=test_trans)
     else:
         raise Exception
 
