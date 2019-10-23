@@ -69,14 +69,14 @@ class CNNTrainer(BaseTrainer):
 
         return losses / len(data_loader), correct / (correct + miss)
 
-    def test(self, test_loader, device=0):
+    def test(self, test_loader):
         self.model.eval()
         losses = 0
         correct = 0
         miss = 0
         t0 = time.time()
         for batch_idx, (data, target) in enumerate(test_loader):
-            data, target = data.cuda(device), target.cuda(device)
+            data, target = data.cuda(), target.cuda()
             with torch.no_grad():
                 if self.color_cnn:
                     transformed_img, mean_max, std_mean = self.model(data, self.coord_map, training=False)

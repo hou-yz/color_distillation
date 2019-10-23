@@ -34,13 +34,17 @@ def main():
                         help='how many batches to wait before logging training status')
     parser.add_argument('--sample_type', type=str, default='grid', choices=['grid', 'kmeans'])
     parser.add_argument('--downsample', type=float, default=1.0, help='down sample ratio for area')
+    parser.add_argument('--seed', type=int, default=None)
     args = parser.parse_args()
 
     # seed
-    np.random.seed(0)
-    torch.manual_seed(0)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    if args.seed is not None:
+        np.random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+    else:
+        torch.backends.cudnn.benchmark = True
 
     if args.dataset == 'svhn':
         H, W, C = 32, 32, 3

@@ -39,13 +39,17 @@ def main():
     parser.add_argument('--resume', type=str, default=None)
     parser.add_argument('--train_classifier', action='store_true')
     parser.add_argument('--label_smooth', type=float, default=0.0)
+    parser.add_argument('--seed', type=int, default=None)
     args = parser.parse_args()
 
     # seed
-    np.random.seed(0)
-    torch.manual_seed(0)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    if args.seed is not None:
+        np.random.seed(args.seed)
+        torch.manual_seed(args.seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+    else:
+        torch.backends.cudnn.benchmark = True
 
     # dataset
     data_path = os.path.expanduser('~/Data')
