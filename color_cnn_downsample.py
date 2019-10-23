@@ -24,7 +24,7 @@ from color_distillation.utils.image_utils import img_color_denormalize, create_c
 def main():
     # settings
     parser = argparse.ArgumentParser(description='ColorCNN down sample')
-    parser.add_argument('-d', '--dataset', type=str, default='cifar10')
+    parser.add_argument('-d', '--dataset', type=str, default='cifar10', choices=['cifar10', 'svhn', 'imagenet'])
     parser.add_argument('-a', '--arch', type=str, default='vgg16', choices=models.names())
     parser.add_argument('-j', '--num_workers', type=int, default=4)
     parser.add_argument('-b', '--batch_size', type=int, default=128, metavar='N',
@@ -53,9 +53,10 @@ def main():
         H, W, C = 32, 32, 3
         num_class = 10
 
-        train_trans = T.Compose([T.ToTensor(), T.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)), ])
-        test_trans = T.Compose([T.ToTensor(), T.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)), ])
-        denormalizer = img_color_denormalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+        train_trans = T.Compose([T.ToTensor(), normalize, ])
+        test_trans = T.Compose([T.ToTensor(), normalize, ])
+        denormalizer = img_color_denormalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
 
         train_set = datasets.SVHN(data_path, split='train', download=True, transform=train_trans)
         test_set = datasets.SVHN(data_path, split='test', download=True, transform=test_trans)
@@ -63,13 +64,25 @@ def main():
         H, W, C = 32, 32, 3
         num_class = 10
 
-        train_trans = T.Compose([T.RandomCrop(32, padding=4), T.RandomHorizontalFlip(), T.ToTensor(),
-                                 T.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)), ])
-        test_trans = T.Compose([T.ToTensor(), T.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)), ])
+        normalize = T.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+        train_trans = T.Compose([T.RandomCrop(32, padding=4), T.RandomHorizontalFlip(), T.ToTensor(), normalize, ])
+        test_trans = T.Compose([T.ToTensor(), normalize, ])
         denormalizer = img_color_denormalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
 
         train_set = datasets.CIFAR10(data_path, train=True, download=True, transform=train_trans)
         test_set = datasets.CIFAR10(data_path, train=False, download=True, transform=test_trans)
+    elif args.dataset == 'imagenet':
+        H, W, C = 224, 224, 3
+        num_class = 1000
+        data_path += '/imagenet'
+
+        normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+        train_trans = T.Compose([T.RandomResizedCrop(224), T.RandomHorizontalFlip(), T.ToTensor(), normalize, ])
+        test_trans = T.Compose([T.Resize(256), T.CenterCrop(224), T.ToTensor(), normalize, ])
+        denormalizer = img_color_denormalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+
+        train_set = datasets.ImageNet(data_path, split='train', transform=train_trans, )
+        test_set = datasets.ImageNet(data_path, split='val', transform=test_trans)
     else:
         raise Exception
 
@@ -92,10 +105,11 @@ def main():
     print(vars(args))
 
     # model
-    classifier = models.create(args.arch, C, num_class).cuda()
+    classifier = models.create(args.arch, num_class, not args.train_classifier).cuda()
     if not args.train_classifier:
-        classifier_dir = 'logs/grid/{}/{}/downsample1.0'.format(args.dataset, args.arch) + '/model.pth'
-        classifier.load_state_dict(torch.load(classifier_dir))
+        if args.dataset != 'imagenet':
+            classifier_dir = 'logs/grid/{}/{}/downsample1.0'.format(args.dataset, args.arch) + '/model.pth'
+            classifier.load_state_dict(torch.load(classifier_dir))
         classifier.eval()
         for param in classifier.parameters():
             param.requires_grad = False

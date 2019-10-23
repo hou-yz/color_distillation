@@ -11,9 +11,9 @@ cfg = {
 
 
 class VGG(nn.Module):
-    def __init__(self, vgg_name, in_channel, out_channel):
+    def __init__(self, vgg_name, out_channel):
         super(VGG, self).__init__()
-        self.features = self._make_layers(in_channel, cfg[vgg_name])
+        self.features = self._make_layers(3, cfg[vgg_name])
         self.features[-1] = nn.AdaptiveMaxPool2d((1, 1))  # remove last pooling layer
         # self.global_average_pooling = nn.AdaptiveAvgPool2d((1, 1))
         self.has_classifier = out_channel != 0
@@ -43,12 +43,12 @@ class VGG(nn.Module):
         return nn.Sequential(*layers)
 
 
-def VGG16(in_channel, out_channel):
-    return VGG('VGG16', in_channel, out_channel)
+def VGG16(out_channel):
+    return VGG('VGG16', out_channel)
 
 
 def test():
-    net = VGG('VGG11', 1, 10)
+    net = VGG('VGG11', 10)
     x = torch.randn(2, 3, 32, 32)
     y = net(x)
     print(y.size())

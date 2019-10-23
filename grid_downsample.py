@@ -19,7 +19,7 @@ def main():
     # settings
     parser = argparse.ArgumentParser(description='Grid-wise down sample')
     parser.add_argument('--train', action='store_true', default=False)
-    parser.add_argument('-d', '--dataset', type=str, default='cifar10')
+    parser.add_argument('-d', '--dataset', type=str, default='cifar10', choices=['cifar10', 'svhn', 'imagenet'])
     parser.add_argument('-a', '--arch', type=str, default='vgg16', choices=models.names())
     parser.add_argument('-j', '--num_workers', type=int, default=4)
     parser.add_argument('-b', '--batch_size', type=int, default=128, metavar='N',
@@ -46,6 +46,8 @@ def main():
         H, W, C = 32, 32, 3
     elif args.dataset == 'cifar10':
         H, W, C = 32, 32, 3
+    elif args.dataset == 'imagenet':
+        H, W, C = 224, 224, 3
     else:
         raise Exception
     if args.sample_type == 'grid':
@@ -59,35 +61,47 @@ def main():
         num_colors = None
 
     # dataset
+    data_path = os.path.expanduser('~/Data')
     if args.dataset == 'svhn':
         num_class = 10
 
-        sampled_train_trans = T.Compose(sample_trans + [T.ToTensor(), T.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)), ])
-        og_test_trans = T.Compose([T.ToTensor(), T.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)), ])
-        sampled_test_trans = T.Compose(sample_trans + [T.ToTensor(), T.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)), ])
+        normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+        sampled_train_trans = T.Compose(sample_trans + [T.ToTensor(), normalize, ])
+        og_test_trans = T.Compose([T.ToTensor(), normalize, ])
+        sampled_test_trans = T.Compose(sample_trans + [T.ToTensor(), normalize, ])
 
-        sampled_train_set = datasets.SVHN('./data', split='train', download=True, transform=sampled_train_trans,
-                                          num_colors=num_colors)
-        og_test_set = datasets.SVHN('./data', split='test', download=True, transform=og_test_trans)
-        sampled_test_set = datasets.SVHN('./data', split='test', download=True, transform=sampled_test_trans,
+        sampled_train_set = datasets.SVHN(data_path, split='train', download=True, transform=sampled_train_trans,
+                                          num_colors=num_colors if args.train else None)
+        og_test_set = datasets.SVHN(data_path, split='test', download=True, transform=og_test_trans)
+        sampled_test_set = datasets.SVHN(data_path, split='test', download=True, transform=sampled_test_trans,
                                          num_colors=num_colors)
     elif args.dataset == 'cifar10':
         num_class = 10
 
+        normalize = T.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
         sampled_train_trans = T.Compose(sample_trans + [T.RandomCrop(32, padding=4),
-                                                        T.RandomHorizontalFlip(), T.ToTensor(),
-                                                        T.Normalize((0.4914, 0.4822, 0.4465),
-                                                                    (0.2023, 0.1994, 0.2010)), ])
-        og_test_trans = T.Compose([T.ToTensor(), T.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)), ])
-        sampled_test_trans = T.Compose(sample_trans + [T.ToTensor(),
-                                                       T.Normalize((0.4914, 0.4822, 0.4465),
-                                                                   (0.2023, 0.1994, 0.2010)), ])
+                                                        T.RandomHorizontalFlip(), T.ToTensor(), normalize, ])
+        og_test_trans = T.Compose([T.ToTensor(), normalize, ])
+        sampled_test_trans = T.Compose(sample_trans + [T.ToTensor(), normalize, ])
 
-        sampled_train_set = datasets.CIFAR10(root='./data', train=True, download=True, transform=sampled_train_trans,
-                                             num_colors=num_colors)
-        og_test_set = datasets.CIFAR10(root='./data', train=False, download=True, transform=og_test_trans)
-        sampled_test_set = datasets.CIFAR10(root='./data', train=False, download=True, transform=sampled_test_trans,
+        sampled_train_set = datasets.CIFAR10(data_path, train=True, download=True, transform=sampled_train_trans,
+                                             num_colors=num_colors if args.train else None)
+        og_test_set = datasets.CIFAR10(data_path, train=False, download=True, transform=og_test_trans)
+        sampled_test_set = datasets.CIFAR10(data_path, train=False, download=True, transform=sampled_test_trans,
                                             num_colors=num_colors)
+    elif args.dataset == 'imagenet':
+        num_class = 1000
+        data_path += '/imagenet'
+
+        normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+        sampled_train_trans = T.Compose(sample_trans + [T.RandomResizedCrop(224), T.RandomHorizontalFlip(),
+                                                        T.ToTensor(), normalize, ])
+        og_test_trans = T.Compose([T.Resize(256), T.CenterCrop(224), T.ToTensor(), normalize, ])
+        sampled_test_trans = T.Compose(sample_trans + [T.Resize(256), T.CenterCrop(224), T.ToTensor(), normalize, ])
+
+        sampled_train_set = datasets.ImageNet(data_path, split='train', transform=sampled_train_trans, )
+        og_test_set = datasets.ImageNet(data_path, split='val', transform=og_test_trans)
+        sampled_test_set = datasets.ImageNet(data_path, split='val', transform=sampled_test_trans, )
     else:
         raise Exception
 
@@ -106,7 +120,7 @@ def main():
     print(vars(args))
 
     # model
-    model = models.create(args.arch, C, num_class).cuda()
+    model = models.create(args.arch, num_class, not args.train).cuda()
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     # scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 10, 1, 0.01)
     scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr,
@@ -145,9 +159,10 @@ def main():
         # save
         torch.save(model.state_dict(), os.path.join(logdir, 'model.pth'))
     else:
-        logdir = 'logs/grid/{}/{}/downsample1.0'.format(args.dataset, args.arch)
-        pretrain_dir = logdir + '/model.pth'
-        model.load_state_dict(torch.load(pretrain_dir))
+        if args.dataset != 'imagenet':
+            logdir = 'logs/grid/{}/{}/downsample1.0'.format(args.dataset, args.arch)
+            pretrain_dir = logdir + '/model.pth'
+            model.load_state_dict(torch.load(pretrain_dir))
         model.eval()
         print('Test on original dateset...')
         trainer.test(og_test_loader)

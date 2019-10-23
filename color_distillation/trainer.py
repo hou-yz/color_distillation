@@ -74,6 +74,7 @@ class CNNTrainer(BaseTrainer):
         losses = 0
         correct = 0
         miss = 0
+        t0 = time.time()
         for batch_idx, (data, target) in enumerate(test_loader):
             data, target = data.cuda(device), target.cuda(device)
             with torch.no_grad():
@@ -99,7 +100,8 @@ class CNNTrainer(BaseTrainer):
                 loss = self.criterion(output, target)
             losses += loss.item()
 
-        print('Test, Loss: {:.6f}, Prec: {:.1f}%'.format(losses / (len(test_loader) + 1),
-                                                         100. * correct / (correct + miss)))
+        print('Test, Loss: {:.6f}, Prec: {:.1f}%, time: {:.1f}'.format(losses / (len(test_loader) + 1),
+                                                                       100. * correct / (correct + miss),
+                                                                       time.time() - t0))
 
         return losses / len(test_loader), correct / (correct + miss)
