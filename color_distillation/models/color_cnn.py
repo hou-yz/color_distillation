@@ -15,7 +15,7 @@ class ColorCNN(nn.Module):
                                         nn.Conv2d(512, num_colors, 1))
         self.mask_softmax = nn.Softmax2d()
 
-    def forward(self, img, coord_map, training=True):
+    def forward(self, img, training=True):
         feat = self.base(img)
         mask = self.color_mask(feat)
         mask = self.mask_softmax(mask)
