@@ -24,7 +24,8 @@ from color_distillation.utils.image_utils import img_color_denormalize, create_c
 def main():
     # settings
     parser = argparse.ArgumentParser(description='ColorCNN down sample')
-    parser.add_argument('-d', '--dataset', type=str, default='cifar10', choices=['cifar10', 'svhn', 'imagenet'])
+    parser.add_argument('-d', '--dataset', type=str, default='cifar10',
+                        choices=['cifar10', 'cifar100', 'stl10', 'svhn', 'imagenet', 'tiny-imagenet-200'])
     parser.add_argument('-a', '--arch', type=str, default='vgg16', choices=models.names())
     parser.add_argument('-j', '--num_workers', type=int, default=4)
     parser.add_argument('-b', '--batch_size', type=int, default=128, metavar='N',
@@ -39,7 +40,7 @@ def main():
     parser.add_argument('--resume', type=str, default=None)
     parser.add_argument('--train_classifier', action='store_true')
     parser.add_argument('--label_smooth', type=float, default=0.0)
-    parser.add_argument('--seed', type=int, default=None)
+    parser.add_argument('--seed', type=int, default=None, help='random seed (default: None)')
     args = parser.parse_args()
 
     # seed
@@ -52,7 +53,7 @@ def main():
         torch.backends.cudnn.benchmark = True
 
     # dataset
-    data_path = os.path.expanduser('~/Data')
+    data_path = os.path.expanduser('~/Data/') + args.dataset
     if args.dataset == 'svhn':
         H, W, C = 32, 32, 3
         num_class = 10
@@ -78,7 +79,6 @@ def main():
     elif args.dataset == 'imagenet':
         H, W, C = 224, 224, 3
         num_class = 1000
-        data_path += '/imagenet'
 
         normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         train_trans = T.Compose([T.RandomResizedCrop(224), T.RandomHorizontalFlip(), T.ToTensor(), normalize, ])
@@ -87,6 +87,28 @@ def main():
 
         train_set = datasets.ImageNet(data_path, split='train', transform=train_trans, )
         test_set = datasets.ImageNet(data_path, split='val', transform=test_trans)
+    elif args.dataset == 'stl10':
+        H, W, C = 96, 96, 3
+        num_class = 10
+
+        normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+        train_trans = T.Compose([T.RandomCrop(96, padding=12), T.RandomHorizontalFlip(), T.ToTensor(), normalize, ])
+        test_trans = T.Compose([T.ToTensor(), normalize, ])
+        denormalizer = img_color_denormalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+
+        train_set = datasets.STL10(data_path, split='train', download=True, transform=train_trans)
+        test_set = datasets.STL10(data_path, split='test', download=True, transform=test_trans)
+    elif args.dataset == 'tiny-imagenet-200':
+        H, W, C = 64, 64, 3
+        num_class = 200
+
+        normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+        train_trans = T.Compose([T.RandomCrop(64, padding=8), T.RandomHorizontalFlip(), T.ToTensor(), normalize, ])
+        test_trans = T.Compose([T.ToTensor(), normalize, ])
+        denormalizer = img_color_denormalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+
+        train_set = datasets.ImageFolder(data_path + '/train', transform=train_trans, )
+        test_set = datasets.ImageFolder(data_path + '/val', transform=test_trans)
     else:
         raise Exception
 
@@ -130,8 +152,6 @@ def main():
     else:
         criterion = nn.CrossEntropyLoss()
 
-    coord_map = create_coord_map([H, W, C], True).cuda()
-
     # draw curve
     x_epoch = []
     train_loss_s = []
@@ -139,12 +159,12 @@ def main():
     og_test_loss_s = []
     og_test_prec_s = []
 
-    trainer = CNNTrainer(model, criterion, classifier, denormalizer, coord_map)
+    trainer = CNNTrainer(model, criterion, classifier, denormalizer)
 
     # learn
     if args.resume is None:
-        print('Testing...')
-        trainer.test(test_loader)
+        # print('Testing...')
+        # trainer.test(test_loader)
 
         for epoch in range(1, args.epochs + 1):
             print('Training...')

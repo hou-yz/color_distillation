@@ -10,13 +10,13 @@ class ColorCNN(nn.Module):
     def __init__(self, in_channel, num_colors):
         super().__init__()
         self.num_colors = num_colors
-        self.base = UNet(in_channel + 3)
+        self.base = UNet(in_channel)
         self.color_mask = nn.Sequential(nn.Conv2d(self.base.out_channel, 512, 1), nn.ReLU(),
                                         nn.Conv2d(512, num_colors, 1))
         self.mask_softmax = nn.Softmax2d()
 
     def forward(self, img, coord_map, training=True):
-        feat = self.base(torch.cat([img, coord_map.repeat([img.shape[0], 1, 1, 1])], dim=1))
+        feat = self.base(img)
         mask = self.color_mask(feat)
         mask = self.mask_softmax(mask)
         argmax_mask = torch.argmax(mask, dim=1, keepdim=True)
@@ -36,8 +36,10 @@ class ColorCNN(nn.Module):
         return transformed_img, mean_max, std_mean
 
 
-if __name__ == '__main__':
+def test():
     img = torch.randn([1, 3, 32, 32])
     model = ColorCNN(3, 128)
     transformed_img = model(img)
     pass
+
+# test()

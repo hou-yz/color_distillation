@@ -13,13 +13,12 @@ class BaseTrainer(object):
 
 
 class CNNTrainer(BaseTrainer):
-    def __init__(self, model, criterion, classifier=None, denormalizer=None, coord_map=None):
+    def __init__(self, model, criterion, classifier=None, denormalizer=None):
         super(BaseTrainer, self).__init__()
         self.model = model
         self.criterion = criterion
         self.classifier = classifier
         self.denormalizer = denormalizer
-        self.coord_map = coord_map
         self.mse_loss = nn.MSELoss()
         if classifier is not None:
             self.color_cnn = True
@@ -36,7 +35,7 @@ class CNNTrainer(BaseTrainer):
             data, target = data.cuda(), target.cuda()
             optimizer.zero_grad()
             if self.color_cnn:
-                transformed_img, mean_max, std_mean = self.model(data, self.coord_map)
+                transformed_img, mean_max, std_mean = self.model(data)
                 output = self.classifier(transformed_img)
             else:
                 output = self.model(data)
@@ -79,8 +78,7 @@ class CNNTrainer(BaseTrainer):
             data, target = data.cuda(), target.cuda()
             with torch.no_grad():
                 if self.color_cnn:
-                    transformed_img, mean_max, std_mean = self.model(data, self.coord_map, training=False)
-                    # transformed_img, mean_max, std_mean = self.model(data, self.coord_map)
+                    transformed_img, mean_max, std_mean = self.model(data, training=False)
                     output = self.classifier(transformed_img)
                     # # plotting
                     # og_img = self.denormalizer(data[0]).cpu().numpy()

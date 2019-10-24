@@ -19,7 +19,8 @@ def main():
     # settings
     parser = argparse.ArgumentParser(description='Grid-wise down sample')
     parser.add_argument('--train', action='store_true', default=False)
-    parser.add_argument('-d', '--dataset', type=str, default='cifar10', choices=['cifar10', 'svhn', 'imagenet'])
+    parser.add_argument('-d', '--dataset', type=str, default='cifar10',
+                        choices=['cifar10', 'cifar100', 'stl10', 'svhn', 'imagenet', 'tiny-imagenet-200'])
     parser.add_argument('-a', '--arch', type=str, default='vgg16', choices=models.names())
     parser.add_argument('-j', '--num_workers', type=int, default=4)
     parser.add_argument('-b', '--batch_size', type=int, default=128, metavar='N',
@@ -29,12 +30,11 @@ def main():
     parser.add_argument('--step_size', type=int, default=40)
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
-    parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed (default: 1)')
     parser.add_argument('--log_interval', type=int, default=100, metavar='N',
                         help='how many batches to wait before logging training status')
     parser.add_argument('--sample_type', type=str, default='grid', choices=['grid', 'kmeans'])
     parser.add_argument('--downsample', type=float, default=1.0, help='down sample ratio for area')
-    parser.add_argument('--seed', type=int, default=None)
+    parser.add_argument('--seed', type=int, default=None, help='random seed (default: None)')
     args = parser.parse_args()
 
     # seed
@@ -46,12 +46,14 @@ def main():
     else:
         torch.backends.cudnn.benchmark = True
 
-    if args.dataset == 'svhn':
-        H, W, C = 32, 32, 3
-    elif args.dataset == 'cifar10':
+    if args.dataset == 'svhn' or args.dataset == 'cifar10' or args.dataset == 'cifar100':
         H, W, C = 32, 32, 3
     elif args.dataset == 'imagenet':
         H, W, C = 224, 224, 3
+    elif args.dataset == 'stl10':
+        H, W, C = 96, 96, 3
+    elif args.dataset == 'tiny-imagenet-200':
+        H, W, C = 64, 64, 3
     else:
         raise Exception
     if args.sample_type == 'grid':
@@ -65,7 +67,7 @@ def main():
         num_colors = None
 
     # dataset
-    data_path = os.path.expanduser('~/Data')
+    data_path = os.path.expanduser('~/Data/') + args.dataset
     if args.dataset == 'svhn':
         num_class = 10
 
@@ -79,8 +81,8 @@ def main():
         og_test_set = datasets.SVHN(data_path, split='test', download=True, transform=og_test_trans)
         sampled_test_set = datasets.SVHN(data_path, split='test', download=True, transform=sampled_test_trans,
                                          num_colors=num_colors)
-    elif args.dataset == 'cifar10':
-        num_class = 10
+    elif args.dataset == 'cifar10' or args.dataset == 'cifar10':
+        num_class = 10 if args.dataset == 'cifar10' else 100
 
         normalize = T.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
         sampled_train_trans = T.Compose(sample_trans + [T.RandomCrop(32, padding=4),
@@ -95,7 +97,6 @@ def main():
                                             num_colors=num_colors)
     elif args.dataset == 'imagenet':
         num_class = 1000
-        data_path += '/imagenet'
 
         normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         sampled_train_trans = T.Compose(sample_trans + [T.RandomResizedCrop(224), T.RandomHorizontalFlip(),
@@ -106,6 +107,30 @@ def main():
         sampled_train_set = datasets.ImageNet(data_path, split='train', transform=sampled_train_trans, )
         og_test_set = datasets.ImageNet(data_path, split='val', transform=og_test_trans)
         sampled_test_set = datasets.ImageNet(data_path, split='val', transform=sampled_test_trans, )
+    elif args.dataset == 'stl10':
+        num_class = 10
+
+        normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+        sampled_train_trans = T.Compose(sample_trans + [T.RandomCrop(96, padding=12),
+                                                        T.RandomHorizontalFlip(), T.ToTensor(), normalize, ])
+        og_test_trans = T.Compose([T.ToTensor(), normalize, ])
+        sampled_test_trans = T.Compose(sample_trans + [T.ToTensor(), normalize, ])
+
+        sampled_train_set = datasets.STL10(data_path, split='train', download=True, transform=sampled_train_trans)
+        og_test_set = datasets.STL10(data_path, split='test', download=True, transform=og_test_trans)
+        sampled_test_set = datasets.STL10(data_path, split='test', download=True, transform=sampled_test_trans)
+    elif args.dataset == 'tiny-imagenet-200':
+        num_class = 200
+
+        normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
+        sampled_train_trans = T.Compose(sample_trans + [T.RandomCrop(64, padding=8), T.RandomHorizontalFlip(),
+                                                        T.ToTensor(), normalize, ])
+        og_test_trans = T.Compose([T.ToTensor(), normalize, ])
+        sampled_test_trans = T.Compose(sample_trans + [T.ToTensor(), normalize, ])
+
+        sampled_train_set = datasets.ImageFolder(data_path + '/train', transform=sampled_train_trans, )
+        og_test_set = datasets.ImageFolder(data_path + '/val', transform=og_test_trans)
+        sampled_test_set = datasets.ImageFolder(data_path + '/val', transform=sampled_test_trans, )
     else:
         raise Exception
 
@@ -126,7 +151,7 @@ def main():
     # model
     model = models.create(args.arch, num_class, not args.train).cuda()
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
-    # scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 10, 1, 0.01)
+    # scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, int(args.epochs / 2), 1)
     scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr,
                                                     steps_per_epoch=len(sampled_train_loader), epochs=args.epochs)
 

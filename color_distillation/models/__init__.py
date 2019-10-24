@@ -31,7 +31,7 @@ def create(name, out_channel, pretrain):
     """
     Create a model instance.
     """
-    if out_channel == 10:
+    if out_channel == 10 or out_channel == 100 or out_channel == 200:
         # use custom models
         if name not in custom_factory:
             raise KeyError("Unknown model:", name)
