@@ -25,7 +25,7 @@ def main():
     parser.add_argument('-j', '--num_workers', type=int, default=4)
     parser.add_argument('-b', '--batch_size', type=int, default=128, metavar='N',
                         help='input batch size for training (default: 128)')
-    parser.add_argument('--epochs', type=int, default=20, metavar='N', help='number of epochs to train (default: 10)')
+    parser.add_argument('--epochs', type=int, default=40, metavar='N', help='number of epochs to train (default: 10)')
     parser.add_argument('--lr', type=float, default=0.1, metavar='LR', help='learning rate (default: 0.1)')
     parser.add_argument('--step_size', type=int, default=40)
     parser.add_argument('--weight_decay', type=float, default=5e-4)
@@ -33,7 +33,7 @@ def main():
     parser.add_argument('--log_interval', type=int, default=100, metavar='N',
                         help='how many batches to wait before logging training status')
     parser.add_argument('--sample_type', type=str, default='grid', choices=['grid', 'kmeans'])
-    parser.add_argument('--downsample', type=float, default=1.0, help='down sample ratio for area')
+    parser.add_argument('--num_colors', type=int, default=None, help='down sample ratio for area')
     parser.add_argument('--seed', type=int, default=None, help='random seed (default: None)')
     args = parser.parse_args()
 
@@ -57,14 +57,11 @@ def main():
     else:
         raise Exception
     if args.sample_type == 'grid':
-        sample_trans = [T.GridDownSample(args.downsample)]
-        num_colors = None
+        sample_trans = [T.GridDownSample(args.num_colors / H / W if args.num_colors is not None else 1)]
     elif args.sample_type == 'kmeans':
         sample_trans = []
-        num_colors = int(H * W * args.downsample)
     else:
         sample_trans = []
-        num_colors = None
 
     # dataset
     data_path = os.path.expanduser('~/Data/') + args.dataset
@@ -77,11 +74,11 @@ def main():
         sampled_test_trans = T.Compose(sample_trans + [T.ToTensor(), normalize, ])
 
         sampled_train_set = datasets.SVHN(data_path, split='train', download=True, transform=sampled_train_trans,
-                                          num_colors=num_colors if args.train else None)
+                                          num_colors=args.num_colors if args.train else None)
         og_test_set = datasets.SVHN(data_path, split='test', download=True, transform=og_test_trans)
         sampled_test_set = datasets.SVHN(data_path, split='test', download=True, transform=sampled_test_trans,
-                                         num_colors=num_colors)
-    elif args.dataset == 'cifar10' or args.dataset == 'cifar10':
+                                         num_colors=args.num_colors)
+    elif args.dataset == 'cifar10' or args.dataset == 'cifar100':
         num_class = 10 if args.dataset == 'cifar10' else 100
 
         normalize = T.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
@@ -90,11 +87,16 @@ def main():
         og_test_trans = T.Compose([T.ToTensor(), normalize, ])
         sampled_test_trans = T.Compose(sample_trans + [T.ToTensor(), normalize, ])
 
-        sampled_train_set = datasets.CIFAR10(data_path, train=True, download=True, transform=sampled_train_trans,
-                                             num_colors=num_colors if args.train else None)
-        og_test_set = datasets.CIFAR10(data_path, train=False, download=True, transform=og_test_trans)
-        sampled_test_set = datasets.CIFAR10(data_path, train=False, download=True, transform=sampled_test_trans,
-                                            num_colors=num_colors)
+        if args.dataset == 'cifar10':
+            sampled_train_set = datasets.CIFAR10(data_path, train=True, download=True, transform=sampled_train_trans,
+                                                 num_colors=args.num_colors if args.train else None)
+            og_test_set = datasets.CIFAR10(data_path, train=False, download=True, transform=og_test_trans)
+            sampled_test_set = datasets.CIFAR10(data_path, train=False, download=True, transform=sampled_test_trans,
+                                                num_colors=args.num_colors)
+        else:
+            sampled_train_set = datasets.CIFAR100(data_path, train=True, download=True, transform=sampled_train_trans)
+            og_test_set = datasets.CIFAR100(data_path, train=False, download=True, transform=og_test_trans)
+            sampled_test_set = datasets.CIFAR100(data_path, train=False, download=True, transform=sampled_test_trans)
     elif args.dataset == 'imagenet':
         num_class = 1000
 
@@ -141,7 +143,8 @@ def main():
     sampled_test_loader = torch.utils.data.DataLoader(sampled_test_set, batch_size=args.batch_size, shuffle=False,
                                                       num_workers=args.num_workers, pin_memory=True)
 
-    logdir = 'logs/grid/{}/{}/downsample{}'.format(args.dataset, args.arch, args.downsample)
+    logdir = 'logs/grid/{}/{}/{}colors'.format(args.dataset, args.arch,
+                                               'full_' if args.num_colors is None else args.num_colors)
     if args.train:
         os.makedirs(logdir, exist_ok=True)
         sys.stdout = Logger(os.path.join(logdir, 'log.txt'), )
@@ -189,9 +192,9 @@ def main():
         torch.save(model.state_dict(), os.path.join(logdir, 'model.pth'))
     else:
         if args.dataset != 'imagenet':
-            logdir = 'logs/grid/{}/{}/downsample1.0'.format(args.dataset, args.arch)
-            pretrain_dir = logdir + '/model.pth'
-            model.load_state_dict(torch.load(pretrain_dir))
+            resume_dir = 'logs/grid/{}/{}/full_colors'.format(args.dataset, args.arch)
+            resume_fname = resume_dir + '/model.pth'
+            model.load_state_dict(torch.load(resume_fname))
         model.eval()
         print('Test on original dateset...')
         trainer.test(og_test_loader)

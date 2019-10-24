@@ -36,7 +36,7 @@ def main():
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
     parser.add_argument('--log_interval', type=int, default=100, metavar='N',
                         help='how many batches to wait before logging training status')
-    parser.add_argument('--downsample', type=float, default=1.0)
+    parser.add_argument('--num_colors', type=int, default=None)
     parser.add_argument('--resume', type=str, default=None)
     parser.add_argument('--train_classifier', action='store_true')
     parser.add_argument('--label_smooth', type=float, default=0.0)
@@ -65,17 +65,21 @@ def main():
 
         train_set = datasets.SVHN(data_path, split='train', download=True, transform=train_trans)
         test_set = datasets.SVHN(data_path, split='test', download=True, transform=test_trans)
-    elif args.dataset == 'cifar10':
+    elif args.dataset == 'cifar10' or args.dataset == 'cifar100':
         H, W, C = 32, 32, 3
-        num_class = 10
+        num_class = 10 if args.dataset == 'cifar10' else 100
 
         normalize = T.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
         train_trans = T.Compose([T.RandomCrop(32, padding=4), T.RandomHorizontalFlip(), T.ToTensor(), normalize, ])
         test_trans = T.Compose([T.ToTensor(), normalize, ])
         denormalizer = img_color_denormalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
 
-        train_set = datasets.CIFAR10(data_path, train=True, download=True, transform=train_trans)
-        test_set = datasets.CIFAR10(data_path, train=False, download=True, transform=test_trans)
+        if args.dataset == 'cifar10':
+            train_set = datasets.CIFAR10(data_path, train=True, download=True, transform=train_trans)
+            test_set = datasets.CIFAR10(data_path, train=False, download=True, transform=test_trans)
+        else:
+            train_set = datasets.CIFAR100(data_path, train=True, download=True, transform=train_trans)
+            test_set = datasets.CIFAR100(data_path, train=False, download=True, transform=test_trans)
     elif args.dataset == 'imagenet':
         H, W, C = 224, 224, 3
         num_class = 1000
@@ -117,8 +121,9 @@ def main():
     test_loader = torch.utils.data.DataLoader(test_set, batch_size=args.batch_size, shuffle=False,
                                               num_workers=args.num_workers, pin_memory=True)
 
-    logdir = 'logs/colorcnn/{}/{}/downsample{}/{}'.format(args.dataset, args.arch, args.downsample,
-                                                          datetime.datetime.today().strftime('%Y-%m-%d_%H-%M-%S'))
+    logdir = 'logs/colorcnn/{}/{}/{}colors/{}'.format(args.dataset, args.arch,
+                                                      'full_' if args.num_colors is None else args.num_colors,
+                                                      datetime.datetime.today().strftime('%Y-%m-%d_%H-%M-%S'))
     if args.resume is None:
         os.makedirs(logdir, exist_ok=True)
         copy_tree('./color_distillation', logdir + '/scripts/color_distillation')
@@ -134,13 +139,13 @@ def main():
     classifier = models.create(args.arch, num_class, not args.train_classifier).cuda()
     if not args.train_classifier:
         if args.dataset != 'imagenet':
-            classifier_dir = 'logs/grid/{}/{}/downsample1.0'.format(args.dataset, args.arch) + '/model.pth'
-            classifier.load_state_dict(torch.load(classifier_dir))
+            resume_fname = 'logs/grid/{}/{}/full_colors'.format(args.dataset, args.arch) + '/model.pth'
+            classifier.load_state_dict(torch.load(resume_fname))
         classifier.eval()
         for param in classifier.parameters():
             param.requires_grad = False
 
-    model = ColorCNN(C, int(H * W * args.downsample)).cuda()
+    model = ColorCNN(C, args.num_colors).cuda()
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 40, 2)
     # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr,
@@ -182,9 +187,10 @@ def main():
         # save
         torch.save(model.state_dict(), os.path.join(logdir, 'ColorCNN.pth'))
     else:
-        logdir = 'logs/colorcnn/{}/{}/downsample{}/'.format(args.dataset, args.arch, args.downsample, ) + args.resume
-        classifier_dir = logdir + '/ColorCNN.pth'
-        model.load_state_dict(torch.load(classifier_dir))
+        resume_dir = 'logs/colorcnn/{}/{}/{}colors/'.format(
+            args.dataset, args.arch, 'full_' if args.num_colors is None else args.num_colors) + args.resume
+        resume_fname = resume_dir + '/ColorCNN.pth'
+        model.load_state_dict(torch.load(resume_fname))
         model.eval()
         print('Test loaded model...')
         trainer.test(test_loader)
