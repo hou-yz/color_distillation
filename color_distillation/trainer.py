@@ -35,7 +35,13 @@ class CNNTrainer(BaseTrainer):
             data, target = data.cuda(), target.cuda()
             optimizer.zero_grad()
             if self.color_cnn:
-                transformed_img, mean_max, std_mean = self.model(data)
+                transformed_img, mask = self.model(data)
+                # regularization
+                B, C, H, W = data.shape
+                color_max, _ = torch.max(mask.view([B, mask.shape[1], -1]), dim=2)
+                color_mean = torch.mean(mask, dim=[2, 3])
+                avg_max = torch.mean(color_max)
+                std_mean = torch.mean(color_mean.std(dim=1))
                 output = self.classifier(transformed_img)
             else:
                 output = self.model(data)
@@ -43,7 +49,7 @@ class CNNTrainer(BaseTrainer):
             correct += pred.eq(target).sum().item()
             miss += target.shape[0] - pred.eq(target).sum().item()
             if self.color_cnn:
-                loss = self.criterion(output, target) - mean_max + std_mean
+                loss = self.criterion(output, target) - 5 * avg_max + 10 * std_mean
             else:
                 loss = self.criterion(output, target)
             loss.backward()
@@ -78,7 +84,7 @@ class CNNTrainer(BaseTrainer):
             data, target = data.cuda(), target.cuda()
             with torch.no_grad():
                 if self.color_cnn:
-                    transformed_img, mean_max, std_mean = self.model(data, training=False)
+                    transformed_img, mask = self.model(data, training=False)
                     output = self.classifier(transformed_img)
                     # # plotting
                     # og_img = self.denormalizer(data[0]).cpu().numpy()
@@ -92,10 +98,7 @@ class CNNTrainer(BaseTrainer):
             pred = torch.argmax(output, 1)
             correct += pred.eq(target).sum().item()
             miss += target.shape[0] - pred.eq(target).sum().item()
-            if self.color_cnn:
-                loss = self.criterion(output, target) - mean_max + std_mean
-            else:
-                loss = self.criterion(output, target)
+            loss = self.criterion(output, target)
             losses += loss.item()
 
         print('Test, Loss: {:.6f}, Prec: {:.1f}%, time: {:.1f}'.format(losses / (len(test_loader) + 1),
