@@ -49,7 +49,7 @@ class CNNTrainer(BaseTrainer):
             correct += pred.eq(target).sum().item()
             miss += target.shape[0] - pred.eq(target).sum().item()
             if self.color_cnn:
-                loss = self.criterion(output, target) - 5 * avg_max + 10 * std_mean
+                loss = self.criterion(output, target) + 10 * (-avg_max + 2 * std_mean)
             else:
                 loss = self.criterion(output, target)
             loss.backward()

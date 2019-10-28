@@ -25,7 +25,7 @@ def main():
     parser.add_argument('-j', '--num_workers', type=int, default=4)
     parser.add_argument('-b', '--batch_size', type=int, default=128, metavar='N',
                         help='input batch size for training (default: 128)')
-    parser.add_argument('--epochs', type=int, default=40, metavar='N', help='number of epochs to train (default: 10)')
+    parser.add_argument('--epochs', type=int, default=60, metavar='N', help='number of epochs to train (default: 10)')
     parser.add_argument('--lr', type=float, default=0.1, metavar='LR', help='learning rate (default: 0.1)')
     parser.add_argument('--step_size', type=int, default=40)
     parser.add_argument('--weight_decay', type=float, default=5e-4)
@@ -154,7 +154,6 @@ def main():
     # model
     model = models.create(args.arch, num_class, not args.train).cuda()
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
-    # scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, int(args.epochs / 2), 1)
     scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr,
                                                     steps_per_epoch=len(sampled_train_loader), epochs=args.epochs)
 
