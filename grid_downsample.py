@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from color_distillation import datasets
+from torchvision import datasets
 import color_distillation.utils.transforms as T
 from color_distillation import models
 from color_distillation.trainer import CNNTrainer
@@ -59,7 +59,7 @@ def main():
     if args.sample_type == 'grid':
         sample_trans = [T.GridDownSample(args.num_colors / H / W if args.num_colors is not None else 1)]
     elif args.sample_type == 'kmeans':
-        sample_trans = []
+        sample_trans = [T.SLIC(args.num_colors)]
     else:
         sample_trans = []
 
@@ -73,11 +73,9 @@ def main():
         og_test_trans = T.Compose([T.ToTensor(), normalize, ])
         sampled_test_trans = T.Compose(sample_trans + [T.ToTensor(), normalize, ])
 
-        sampled_train_set = datasets.SVHN(data_path, split='train', download=True, transform=sampled_train_trans,
-                                          num_colors=args.num_colors if args.train else None)
+        sampled_train_set = datasets.SVHN(data_path, split='train', download=True, transform=sampled_train_trans)
         og_test_set = datasets.SVHN(data_path, split='test', download=True, transform=og_test_trans)
-        sampled_test_set = datasets.SVHN(data_path, split='test', download=True, transform=sampled_test_trans,
-                                         num_colors=args.num_colors)
+        sampled_test_set = datasets.SVHN(data_path, split='test', download=True, transform=sampled_test_trans)
     elif args.dataset == 'cifar10' or args.dataset == 'cifar100':
         num_class = 10 if args.dataset == 'cifar10' else 100
 
@@ -88,11 +86,9 @@ def main():
         sampled_test_trans = T.Compose(sample_trans + [T.ToTensor(), normalize, ])
 
         if args.dataset == 'cifar10':
-            sampled_train_set = datasets.CIFAR10(data_path, train=True, download=True, transform=sampled_train_trans,
-                                                 num_colors=args.num_colors if args.train else None)
+            sampled_train_set = datasets.CIFAR10(data_path, train=True, download=True, transform=sampled_train_trans)
             og_test_set = datasets.CIFAR10(data_path, train=False, download=True, transform=og_test_trans)
-            sampled_test_set = datasets.CIFAR10(data_path, train=False, download=True, transform=sampled_test_trans,
-                                                num_colors=args.num_colors)
+            sampled_test_set = datasets.CIFAR10(data_path, train=False, download=True, transform=sampled_test_trans)
         else:
             sampled_train_set = datasets.CIFAR100(data_path, train=True, download=True, transform=sampled_train_trans)
             og_test_set = datasets.CIFAR100(data_path, train=False, download=True, transform=og_test_trans)

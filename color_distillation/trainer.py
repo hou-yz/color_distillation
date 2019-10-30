@@ -1,10 +1,11 @@
 import time
 import copy
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import matplotlib.pyplot as plt
+from PIL import Image
 
 
 class BaseTrainer(object):
@@ -13,13 +14,13 @@ class BaseTrainer(object):
 
 
 class CNNTrainer(BaseTrainer):
-    def __init__(self, model, criterion, classifier=None, denormalizer=None):
+    def __init__(self, model, criterion, classifier=None, denormalizer=None, regularization=None):
         super(BaseTrainer, self).__init__()
         self.model = model
         self.criterion = criterion
         self.classifier = classifier
         self.denormalizer = denormalizer
-        self.mse_loss = nn.MSELoss()
+        self.regularization = regularization
         if classifier is not None:
             self.color_cnn = True
         else:
@@ -49,7 +50,7 @@ class CNNTrainer(BaseTrainer):
             correct += pred.eq(target).sum().item()
             miss += target.shape[0] - pred.eq(target).sum().item()
             if self.color_cnn:
-                loss = self.criterion(output, target) + 10 * (-avg_max + 2 * std_mean)
+                loss = self.criterion(output, target) + self.regularization * (-avg_max + 2 * std_mean)
             else:
                 loss = self.criterion(output, target)
             loss.backward()
@@ -87,12 +88,17 @@ class CNNTrainer(BaseTrainer):
                     transformed_img, mask = self.model(data, training=False)
                     output = self.classifier(transformed_img)
                     # # plotting
-                    # og_img = self.denormalizer(data[0]).cpu().numpy()
-                    # plt.imshow(og_img.reshape([3, 32, 32]).transpose([1, 2, 0]))
+                    # og_img = self.denormalizer(data[0]).cpu().numpy().squeeze().transpose([1, 2, 0])
+                    # plt.imshow(og_img)
                     # plt.show()
-                    # downsampled_img = self.denormalizer(transformed_img[0]).cpu().numpy()
-                    # plt.imshow(downsampled_img.reshape([3, 32, 32]).transpose([1, 2, 0]))
+                    # downsampled_img = self.denormalizer(transformed_img[0]).cpu().numpy().squeeze().transpose([1, 2, 0])
+                    # plt.imshow(downsampled_img)
                     # plt.show()
+                    # og_img = Image.fromarray((og_img * 255).astype('uint8'))
+                    # og_img.save('og_img.png')
+                    # downsampled_img = Image.fromarray((downsampled_img * 255).astype('uint8'))
+                    # downsampled_img.save('downsampled_img.png')
+                    pass
                 else:
                     output = self.model(data)
             pred = torch.argmax(output, 1)

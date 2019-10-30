@@ -41,6 +41,7 @@ def main():
     parser.add_argument('--train_classifier', action='store_true')
     parser.add_argument('--label_smooth', type=float, default=0.0)
     parser.add_argument('--seed', type=int, default=None, help='random seed (default: None)')
+    parser.add_argument('--regularization',type=float,default=10,help='multiplier of regularization terms')
     args = parser.parse_args()
 
     # seed
@@ -164,7 +165,7 @@ def main():
     og_test_loss_s = []
     og_test_prec_s = []
 
-    trainer = CNNTrainer(model, criterion, classifier, denormalizer)
+    trainer = CNNTrainer(model, criterion, classifier, denormalizer, args.regularization)
 
     # learn
     if args.resume is None:
