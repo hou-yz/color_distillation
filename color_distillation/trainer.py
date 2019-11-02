@@ -14,13 +14,15 @@ class BaseTrainer(object):
 
 
 class CNNTrainer(BaseTrainer):
-    def __init__(self, model, criterion, classifier=None, denormalizer=None, regularization=None):
+    def __init__(self, model, criterion, classifier=None, denormalizer=None, alpha=None, beta=None, visualize=False):
         super(BaseTrainer, self).__init__()
         self.model = model
         self.criterion = criterion
         self.classifier = classifier
         self.denormalizer = denormalizer
-        self.regularization = regularization
+        self.alpha = alpha
+        self.beta = beta
+        self.visualize = visualize
         if classifier is not None:
             self.color_cnn = True
         else:
@@ -50,7 +52,7 @@ class CNNTrainer(BaseTrainer):
             correct += pred.eq(target).sum().item()
             miss += target.shape[0] - pred.eq(target).sum().item()
             if self.color_cnn:
-                loss = self.criterion(output, target) + self.regularization * (-avg_max + 10 * std_mean)
+                loss = self.criterion(output, target) - self.alpha * avg_max + self.beta * std_mean
             else:
                 loss = self.criterion(output, target)
             loss.backward()
@@ -87,17 +89,23 @@ class CNNTrainer(BaseTrainer):
                 if self.color_cnn:
                     transformed_img, mask = self.model(data, training=False)
                     output = self.classifier(transformed_img)
-                    # # plotting
-                    # og_img = self.denormalizer(data[0]).cpu().numpy().squeeze().transpose([1, 2, 0])
-                    # plt.imshow(og_img)
-                    # plt.show()
-                    # downsampled_img = self.denormalizer(transformed_img[0]).cpu().numpy().squeeze().transpose([1, 2, 0])
-                    # plt.imshow(downsampled_img)
-                    # plt.show()
-                    # og_img = Image.fromarray((og_img * 255).astype('uint8'))
-                    # og_img.save('og_img.png')
-                    # downsampled_img = Image.fromarray((downsampled_img * 255).astype('uint8'))
-                    # downsampled_img.save('downsampled_img.png')
+                    # plotting
+                    if self.visualize:
+                        M = torch.argmax(mask, dim=1, keepdim=True)  # argmax color index map
+                        plt.imshow(M[11, 0].cpu().numpy(), cmap='Blues')
+                        plt.savefig("M.png", bbox_inches='tight')
+                        plt.show()
+                        og_img = self.denormalizer(data[11]).cpu().numpy().squeeze().transpose([1, 2, 0])
+                        plt.imshow(og_img)
+                        plt.show()
+                        downsampled_img = self.denormalizer(transformed_img[11]).cpu().numpy().squeeze().transpose(
+                            [1, 2, 0])
+                        plt.imshow(downsampled_img)
+                        plt.show()
+                        og_img = Image.fromarray((og_img * 255).astype('uint8'))
+                        og_img.save('og_img.png')
+                        downsampled_img = Image.fromarray((downsampled_img * 255).astype('uint8'))
+                        downsampled_img.save('downsample_img.png')
                     pass
                 else:
                     output = self.model(data)

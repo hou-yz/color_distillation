@@ -17,22 +17,21 @@ class ColorCNN(nn.Module):
         self.mask_softmax = nn.Softmax2d()
 
     def forward(self, img, training=True):
-        B, C, H, W = img.shape
         feat = self.base(img)
-        mask = self.color_mask(feat)
-        mask = self.mask_softmax(self.soften * mask)
-        argmax_mask = torch.argmax(mask, dim=1, keepdim=True)
-        argmax_mask = torch.zeros_like(mask).scatter(1, argmax_mask, 1)
+        m = self.color_mask(feat)
+        m = self.mask_softmax(self.soften * m)  # softmax output
+        M = torch.argmax(m, dim=1, keepdim=True)  # argmax color index map
+        indicator_M = torch.zeros_like(m).scatter(1, M, 1)
         if training:
-            weighted_color = (img.unsqueeze(2) * mask.unsqueeze(1)).sum(dim=[3, 4], keepdim=True) / (
-                    mask.unsqueeze(1).sum(dim=[3, 4], keepdim=True) + 1e-8)
-            transformed_img = (mask.unsqueeze(1) * weighted_color).sum(dim=2)
+            weighted_color = (img.unsqueeze(2) * m.unsqueeze(1)).sum(dim=[3, 4], keepdim=True) / (
+                    m.unsqueeze(1).sum(dim=[3, 4], keepdim=True) + 1e-8)
+            transformed_img = (m.unsqueeze(1) * weighted_color).sum(dim=2)
         else:
-            weighted_color = (img.unsqueeze(2) * argmax_mask.unsqueeze(1)).sum(dim=[3, 4], keepdim=True) / (
-                    argmax_mask.unsqueeze(1).sum(dim=[3, 4], keepdim=True) + 1e-8)
-            transformed_img = (argmax_mask.unsqueeze(1) * weighted_color).sum(dim=2)
+            weighted_color = (img.unsqueeze(2) * indicator_M.unsqueeze(1)).sum(dim=[3, 4], keepdim=True) / (
+                    indicator_M.unsqueeze(1).sum(dim=[3, 4], keepdim=True) + 1e-8)
+            transformed_img = (indicator_M.unsqueeze(1) * weighted_color).sum(dim=2)
 
-        return transformed_img, mask
+        return transformed_img, m
 
 
 def test():

@@ -30,7 +30,7 @@ def main():
     parser.add_argument('-j', '--num_workers', type=int, default=4)
     parser.add_argument('-b', '--batch_size', type=int, default=128, metavar='N',
                         help='input batch size for training (default: 128)')
-    parser.add_argument('--epochs', type=int, default=40, metavar='N', help='number of epochs to train (default: 10)')
+    parser.add_argument('--epochs', type=int, default=60, metavar='N', help='number of epochs to train (default: 10)')
     parser.add_argument('--lr', type=float, default=1e-2, metavar='LR', help='learning rate (default: 0.1)')
     parser.add_argument('--weight_decay', type=float, default=5e-4)
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
@@ -41,7 +41,8 @@ def main():
     parser.add_argument('--train_classifier', action='store_true')
     parser.add_argument('--label_smooth', type=float, default=0.0)
     parser.add_argument('--soften', type=float, default=1, help='soften coefficient for softmax')
-    parser.add_argument('--regularization', type=float, default=1, help='multiplier of regularization terms')
+    parser.add_argument('--alpha', type=float, default=10, help='multiplier of regularization terms')
+    parser.add_argument('--beta', type=float, default=2, help='multiplier of regularization terms')
     parser.add_argument('--seed', type=int, default=None, help='random seed (default: None)')
     args = parser.parse_args()
 
@@ -149,9 +150,9 @@ def main():
 
     model = ColorCNN(C, args.num_colors, args.soften).cuda()
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
-    # scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 40, 2)
-    scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr,
-                                                    steps_per_epoch=len(train_loader), epochs=args.epochs)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 20, 1)
+    # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr,
+    #                                                 steps_per_epoch=len(train_loader), epochs=args.epochs)
 
     # loss
     if args.label_smooth:
@@ -166,7 +167,7 @@ def main():
     og_test_loss_s = []
     og_test_prec_s = []
 
-    trainer = CNNTrainer(model, criterion, classifier, denormalizer, args.regularization)
+    trainer = CNNTrainer(model, criterion, classifier, denormalizer, args.alpha, args.beta)
 
     # learn
     if args.resume is None:
