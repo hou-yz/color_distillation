@@ -13,11 +13,15 @@ from color_distillation import models
 from color_distillation.trainer import CNNTrainer
 from color_distillation.utils.draw_curve import draw_curve
 from color_distillation.utils.logging import Logger
+from color_distillation.utils.buffer_size_counter import BufferSizeCounter
 
 
 def main():
     # settings
     parser = argparse.ArgumentParser(description='Grid-wise down sample')
+    parser.add_argument('--num_colors', type=int, default=None, help='down sample ratio for area')
+    parser.add_argument('--sample_type', type=str, default=None, choices=['slic', 'mcut', 'octree','kmeans', 'jpeg'])
+    parser.add_argument('--jpeg_ratio', type=int, default=10)
     parser.add_argument('--train', action='store_true', default=False)
     parser.add_argument('-d', '--dataset', type=str, default='cifar10',
                         choices=['cifar10', 'cifar100', 'stl10', 'svhn', 'imagenet', 'tiny-imagenet-200'])
@@ -32,8 +36,6 @@ def main():
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
     parser.add_argument('--log_interval', type=int, default=100, metavar='N',
                         help='how many batches to wait before logging training status')
-    parser.add_argument('--sample_type', type=str, default='grid', choices=['grid', 'kmeans'])
-    parser.add_argument('--num_colors', type=int, default=None, help='down sample ratio for area')
     parser.add_argument('--seed', type=int, default=None, help='random seed (default: None)')
     args = parser.parse_args()
 
@@ -56,12 +58,23 @@ def main():
         H, W, C = 64, 64, 3
     else:
         raise Exception
-    if args.sample_type == 'grid':
-        sample_trans = [T.GridDownSample(args.num_colors / H / W if args.num_colors is not None else 1)]
+
+    buffer_size_counter = BufferSizeCounter()
+    og_trans = [T.PNGCompression(buffer_size_counter)]
+    if args.sample_type == 'slic':
+        sample_trans = [T.SLIC(args.num_colors), T.PNGCompression(buffer_size_counter)]
+    elif args.sample_type == 'mcut':
+        sample_trans = [T.MedianCut(args.num_colors), T.PNGCompression(buffer_size_counter)]
+    elif args.sample_type == 'octree':
+        sample_trans = [T.OCTree(args.num_colors), T.PNGCompression(buffer_size_counter)]
     elif args.sample_type == 'kmeans':
-        sample_trans = [T.SLIC(args.num_colors)]
+        sample_trans = [T.KMeans(args.num_colors), T.PNGCompression(buffer_size_counter)]
+    elif args.sample_type == 'jpeg':
+        sample_trans = [T.JpegCompression(buffer_size_counter, args.jpeg_ratio)]
+    elif args.sample_type is None:
+        sample_trans = [T.PNGCompression(buffer_size_counter)]
     else:
-        sample_trans = []
+        raise Exception
 
     # dataset
     data_path = os.path.expanduser('~/Data/') + args.dataset
@@ -70,7 +83,7 @@ def main():
 
         normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         sampled_train_trans = T.Compose(sample_trans + [T.ToTensor(), normalize, ])
-        og_test_trans = T.Compose([T.ToTensor(), normalize, ])
+        og_test_trans = T.Compose(og_trans + [T.ToTensor(), normalize, ])
         sampled_test_trans = T.Compose(sample_trans + [T.ToTensor(), normalize, ])
 
         sampled_train_set = datasets.SVHN(data_path, split='train', download=True, transform=sampled_train_trans)
@@ -82,7 +95,7 @@ def main():
         normalize = T.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
         sampled_train_trans = T.Compose(sample_trans + [T.RandomCrop(32, padding=4),
                                                         T.RandomHorizontalFlip(), T.ToTensor(), normalize, ])
-        og_test_trans = T.Compose([T.ToTensor(), normalize, ])
+        og_test_trans = T.Compose(og_trans + [T.ToTensor(), normalize, ])
         sampled_test_trans = T.Compose(sample_trans + [T.ToTensor(), normalize, ])
 
         if args.dataset == 'cifar10':
@@ -99,7 +112,7 @@ def main():
         normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         sampled_train_trans = T.Compose(sample_trans + [T.RandomResizedCrop(224), T.RandomHorizontalFlip(),
                                                         T.ToTensor(), normalize, ])
-        og_test_trans = T.Compose([T.Resize(256), T.CenterCrop(224), T.ToTensor(), normalize, ])
+        og_test_trans = T.Compose(og_trans + [T.Resize(256), T.CenterCrop(224), T.ToTensor(), normalize, ])
         sampled_test_trans = T.Compose(sample_trans + [T.Resize(256), T.CenterCrop(224), T.ToTensor(), normalize, ])
 
         sampled_train_set = datasets.ImageNet(data_path, split='train', transform=sampled_train_trans, )
@@ -111,7 +124,7 @@ def main():
         normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         sampled_train_trans = T.Compose(sample_trans + [T.RandomCrop(96, padding=12),
                                                         T.RandomHorizontalFlip(), T.ToTensor(), normalize, ])
-        og_test_trans = T.Compose([T.ToTensor(), normalize, ])
+        og_test_trans = T.Compose(og_trans + [T.ToTensor(), normalize, ])
         sampled_test_trans = T.Compose(sample_trans + [T.ToTensor(), normalize, ])
 
         sampled_train_set = datasets.STL10(data_path, split='train', download=True, transform=sampled_train_trans)
@@ -123,7 +136,7 @@ def main():
         normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         sampled_train_trans = T.Compose(sample_trans + [T.RandomCrop(64, padding=8), T.RandomHorizontalFlip(),
                                                         T.ToTensor(), normalize, ])
-        og_test_trans = T.Compose([T.ToTensor(), normalize, ])
+        og_test_trans = T.Compose(og_trans + [T.ToTensor(), normalize, ])
         sampled_test_trans = T.Compose(sample_trans + [T.ToTensor(), normalize, ])
 
         sampled_train_set = datasets.ImageFolder(data_path + '/train', transform=sampled_train_trans, )
@@ -191,10 +204,15 @@ def main():
             resume_fname = resume_dir + '/model.pth'
             model.load_state_dict(torch.load(resume_fname))
         model.eval()
-        print('Test on original dateset...')
-        trainer.test(og_test_loader)
+        # print('Test on original dateset...')
+        # trainer.test(og_test_loader)
+        # print(f'Average image size: {buffer_size_counter.size / len(sampled_test_set):.1f}; '
+        #       f'Bit per pixel: {buffer_size_counter.size / len(sampled_test_set) / H / W:.3f}')
+        buffer_size_counter.reset()
         print('Test on sampled dateset...')
         trainer.test(sampled_test_loader)
+        print(f'Average image size: {buffer_size_counter.size / len(sampled_test_set):.1f}; '
+              f'Bit per pixel: {buffer_size_counter.size / len(sampled_test_set) / H / W:.3f}')
 
 
 if __name__ == '__main__':

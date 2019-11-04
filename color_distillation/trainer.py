@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from PIL import Image
+from io import BytesIO
 
 
 class BaseTrainer(object):
@@ -14,7 +15,8 @@ class BaseTrainer(object):
 
 
 class CNNTrainer(BaseTrainer):
-    def __init__(self, model, criterion, classifier=None, denormalizer=None, alpha=None, beta=None, visualize=False):
+    def __init__(self, model, criterion, classifier=None, denormalizer=None, alpha=None, beta=None, gamma=None,
+                 visualize=False):
         super(BaseTrainer, self).__init__()
         self.model = model
         self.criterion = criterion
@@ -22,6 +24,8 @@ class CNNTrainer(BaseTrainer):
         self.denormalizer = denormalizer
         self.alpha = alpha
         self.beta = beta
+        self.gamma = gamma
+        self.reconsturction_loss = nn.MSELoss()
         self.visualize = visualize
         if classifier is not None:
             self.color_cnn = True
@@ -52,7 +56,8 @@ class CNNTrainer(BaseTrainer):
             correct += pred.eq(target).sum().item()
             miss += target.shape[0] - pred.eq(target).sum().item()
             if self.color_cnn:
-                loss = self.criterion(output, target) - self.alpha * avg_max + self.beta * std_mean
+                loss = self.criterion(output, target) + self.alpha * (1 - avg_max) + self.beta * std_mean + \
+                       self.gamma * self.reconsturction_loss(data, transformed_img)
             else:
                 loss = self.criterion(output, target)
             loss.backward()
@@ -78,6 +83,9 @@ class CNNTrainer(BaseTrainer):
         return losses / len(data_loader), correct / (correct + miss)
 
     def test(self, test_loader):
+        buffer_size_counter = 0
+        number_of_colors = 0
+        dataset_size = 0
         self.model.eval()
         losses = 0
         correct = 0
@@ -87,11 +95,24 @@ class CNNTrainer(BaseTrainer):
             data, target = data.cuda(), target.cuda()
             with torch.no_grad():
                 if self.color_cnn:
+                    B, C, H, W = data.shape
                     transformed_img, mask = self.model(data, training=False)
                     output = self.classifier(transformed_img)
+                    # image file size
+                    M = torch.argmax(mask, dim=1, keepdim=True)  # argmax color index map
+                    for i in range(target.shape[0]):
+                        number_of_colors += len(M[0].unique())
+                        downsampled_img = self.denormalizer(transformed_img[i]).cpu().numpy().squeeze().transpose(
+                            [1, 2, 0])
+                        downsampled_img = Image.fromarray((downsampled_img * 255).astype('uint8'))
+
+                        png_buffer = BytesIO()
+                        downsampled_img.save(png_buffer, "PNG")
+                        buffer_size_counter += png_buffer.getbuffer().nbytes
+                        dataset_size += 1
+
                     # plotting
                     if self.visualize:
-                        M = torch.argmax(mask, dim=1, keepdim=True)  # argmax color index map
                         plt.imshow(M[11, 0].cpu().numpy(), cmap='Blues')
                         plt.savefig("M.png", bbox_inches='tight')
                         plt.show()
@@ -118,5 +139,9 @@ class CNNTrainer(BaseTrainer):
         print('Test, Loss: {:.6f}, Prec: {:.1f}%, time: {:.1f}'.format(losses / (len(test_loader) + 1),
                                                                        100. * correct / (correct + miss),
                                                                        time.time() - t0))
+        if self.color_cnn:
+            print(f'Average number of colors per image: {number_of_colors / dataset_size}; \n'
+                  f'Average image size: {buffer_size_counter / dataset_size:.1f}; '
+                  f'Bit per pixel: {buffer_size_counter / dataset_size / H / W:.3f}')
 
         return losses / len(test_loader), correct / (correct + miss)

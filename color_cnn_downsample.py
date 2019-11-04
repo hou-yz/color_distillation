@@ -24,6 +24,13 @@ from color_distillation.utils.image_utils import img_color_denormalize, create_c
 def main():
     # settings
     parser = argparse.ArgumentParser(description='ColorCNN down sample')
+    parser.add_argument('--num_colors', type=int, default=None)
+    parser.add_argument('--alpha', type=float, default=1, help='multiplier of regularization terms')
+    parser.add_argument('--beta', type=float, default=2, help='multiplier of regularization terms')
+    parser.add_argument('--gamma', type=float, default=0, help='multiplier of reconstruction loss')
+    parser.add_argument('--color_norm', type=float, default=4, help='normalizer for color palette')
+    parser.add_argument('--label_smooth', type=float, default=0.0)
+    parser.add_argument('--soften', type=float, default=1, help='soften coefficient for softmax')
     parser.add_argument('-d', '--dataset', type=str, default='cifar10',
                         choices=['cifar10', 'cifar100', 'stl10', 'svhn', 'imagenet', 'tiny-imagenet-200'])
     parser.add_argument('-a', '--arch', type=str, default='vgg16', choices=models.names())
@@ -36,13 +43,8 @@ def main():
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
     parser.add_argument('--log_interval', type=int, default=100, metavar='N',
                         help='how many batches to wait before logging training status')
-    parser.add_argument('--num_colors', type=int, default=None)
     parser.add_argument('--resume', type=str, default=None)
     parser.add_argument('--train_classifier', action='store_true')
-    parser.add_argument('--label_smooth', type=float, default=0.0)
-    parser.add_argument('--soften', type=float, default=1, help='soften coefficient for softmax')
-    parser.add_argument('--alpha', type=float, default=10, help='multiplier of regularization terms')
-    parser.add_argument('--beta', type=float, default=2, help='multiplier of regularization terms')
     parser.add_argument('--seed', type=int, default=None, help='random seed (default: None)')
     args = parser.parse_args()
 
@@ -148,7 +150,7 @@ def main():
         for param in classifier.parameters():
             param.requires_grad = False
 
-    model = ColorCNN(C, args.num_colors, args.soften).cuda()
+    model = ColorCNN(C, args.num_colors, args.soften, args.color_norm).cuda()
     optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 20, 1)
     # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr,
@@ -167,7 +169,7 @@ def main():
     og_test_loss_s = []
     og_test_prec_s = []
 
-    trainer = CNNTrainer(model, criterion, classifier, denormalizer, args.alpha, args.beta)
+    trainer = CNNTrainer(model, criterion, classifier, denormalizer, args.alpha, args.beta, args.gamma)
 
     # learn
     if args.resume is None:

@@ -7,10 +7,11 @@ from color_distillation.models.unet import UNet
 
 
 class ColorCNN(nn.Module):
-    def __init__(self, in_channel, num_colors, soften=1):
+    def __init__(self, in_channel, num_colors, soften=1, color_norm=1):
         super().__init__()
         self.num_colors = num_colors
         self.soften = soften
+        self.color_norm = color_norm
         self.base = UNet(in_channel)
         self.color_mask = nn.Sequential(nn.Conv2d(self.base.out_channel, 256, 1), nn.ReLU(),
                                         nn.Conv2d(256, num_colors, 1, bias=False))
@@ -24,7 +25,7 @@ class ColorCNN(nn.Module):
         indicator_M = torch.zeros_like(m).scatter(1, M, 1)
         if training:
             weighted_color = (img.unsqueeze(2) * m.unsqueeze(1)).sum(dim=[3, 4], keepdim=True) / (
-                    m.unsqueeze(1).sum(dim=[3, 4], keepdim=True) + 1e-8)
+                    m.unsqueeze(1).sum(dim=[3, 4], keepdim=True) + 1e-8) / self.color_norm
             transformed_img = (m.unsqueeze(1) * weighted_color).sum(dim=2)
         else:
             weighted_color = (img.unsqueeze(2) * indicator_M.unsqueeze(1)).sum(dim=[3, 4], keepdim=True) / (
