@@ -42,13 +42,17 @@ class CNNTrainer(BaseTrainer):
             data, target = data.cuda(), target.cuda()
             optimizer.zero_grad()
             if self.color_cnn:
-                transformed_img, mask = self.model(data)
+                transformed_img, prob, color_palette = self.model(data)
                 # regularization
-                B, C, H, W = data.shape
-                color_max, _ = torch.max(mask.view([B, mask.shape[1], -1]), dim=2)
-                color_mean = torch.mean(mask, dim=[2, 3])
-                avg_max = torch.mean(color_max)
-                std_mean = torch.mean(color_mean.std(dim=1))
+                B, _, H, W = data.shape
+                prob_max, _ = torch.max(prob.view([B, prob.shape[1], -1]), dim=2)
+                prob_mean = torch.mean(prob, dim=[2, 3])
+                avg_max = torch.mean(prob_max)
+                std_mean = torch.mean(prob_mean.std(dim=1))
+                color_contribution = (data.unsqueeze(2) * prob.unsqueeze(1))
+                color_var = ((color_contribution - color_palette).pow(2) *
+                             prob.unsqueeze(1)).sum(dim=[3, 4], keepdim=True) / (
+                                    prob.unsqueeze(1).sum(dim=[3, 4], keepdim=True) + 1e-8)
                 output = self.classifier(transformed_img)
             else:
                 output = self.model(data)
@@ -56,7 +60,7 @@ class CNNTrainer(BaseTrainer):
             correct += pred.eq(target).sum().item()
             miss += target.shape[0] - pred.eq(target).sum().item()
             if self.color_cnn:
-                loss = self.criterion(output, target) + self.alpha * (1 - avg_max) + self.beta * std_mean + \
+                loss = self.criterion(output, target) + self.alpha * (1 - avg_max) + self.beta * color_var.mean() + \
                        self.gamma * self.reconsturction_loss(data, transformed_img)
             else:
                 loss = self.criterion(output, target)
@@ -96,10 +100,10 @@ class CNNTrainer(BaseTrainer):
             with torch.no_grad():
                 if self.color_cnn:
                     B, C, H, W = data.shape
-                    transformed_img, mask = self.model(data, training=False)
+                    transformed_img, prob, _ = self.model(data, training=False)
                     output = self.classifier(transformed_img)
                     # image file size
-                    M = torch.argmax(mask, dim=1, keepdim=True)  # argmax color index map
+                    M = torch.argmax(prob, dim=1, keepdim=True)  # argmax color index map
                     for i in range(target.shape[0]):
                         number_of_colors += len(M[0].unique())
                         downsampled_img = self.denormalizer(transformed_img[i]).cpu().numpy().squeeze().transpose(

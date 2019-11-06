@@ -7,11 +7,12 @@ from color_distillation.models.unet import UNet
 
 
 class ColorCNN(nn.Module):
-    def __init__(self, in_channel, num_colors, soften=1, color_norm=1):
+    def __init__(self, in_channel, num_colors, soften=1, color_norm=1, color_jitter=0):
         super().__init__()
         self.num_colors = num_colors
         self.soften = soften
         self.color_norm = color_norm
+        self.color_jitter = color_jitter
         self.base = UNet(in_channel)
         self.color_mask = nn.Sequential(nn.Conv2d(self.base.out_channel, 256, 1), nn.ReLU(),
                                         nn.Conv2d(256, num_colors, 1, bias=False))
@@ -24,15 +25,16 @@ class ColorCNN(nn.Module):
         M = torch.argmax(m, dim=1, keepdim=True)  # argmax color index map
         indicator_M = torch.zeros_like(m).scatter(1, M, 1)
         if training:
-            weighted_color = (img.unsqueeze(2) * m.unsqueeze(1)).sum(dim=[3, 4], keepdim=True) / (
+            color_palette = (img.unsqueeze(2) * m.unsqueeze(1)).sum(dim=[3, 4], keepdim=True) / (
                     m.unsqueeze(1).sum(dim=[3, 4], keepdim=True) + 1e-8) / self.color_norm
-            transformed_img = (m.unsqueeze(1) * weighted_color).sum(dim=2)
+            jitter_color_palette = color_palette + self.color_jitter * np.random.randn()
+            transformed_img = (m.unsqueeze(1) * jitter_color_palette).sum(dim=2)
         else:
-            weighted_color = (img.unsqueeze(2) * indicator_M.unsqueeze(1)).sum(dim=[3, 4], keepdim=True) / (
+            color_palette = (img.unsqueeze(2) * indicator_M.unsqueeze(1)).sum(dim=[3, 4], keepdim=True) / (
                     indicator_M.unsqueeze(1).sum(dim=[3, 4], keepdim=True) + 1e-8)
-            transformed_img = (indicator_M.unsqueeze(1) * weighted_color).sum(dim=2)
+            transformed_img = (indicator_M.unsqueeze(1) * color_palette).sum(dim=2)
 
-        return transformed_img, m
+        return transformed_img, m, color_palette
 
 
 def test():

@@ -26,8 +26,9 @@ def main():
     parser = argparse.ArgumentParser(description='ColorCNN down sample')
     parser.add_argument('--num_colors', type=int, default=None)
     parser.add_argument('--alpha', type=float, default=1, help='multiplier of regularization terms')
-    parser.add_argument('--beta', type=float, default=2, help='multiplier of regularization terms')
+    parser.add_argument('--beta', type=float, default=0, help='multiplier of regularization terms')
     parser.add_argument('--gamma', type=float, default=0, help='multiplier of reconstruction loss')
+    parser.add_argument('--color_jitter', type=float, default=2)
     parser.add_argument('--color_norm', type=float, default=4, help='normalizer for color palette')
     parser.add_argument('--label_smooth', type=float, default=0.0)
     parser.add_argument('--soften', type=float, default=1, help='soften coefficient for softmax')
@@ -150,8 +151,9 @@ def main():
         for param in classifier.parameters():
             param.requires_grad = False
 
-    model = ColorCNN(C, args.num_colors, args.soften, args.color_norm).cuda()
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+    model = ColorCNN(C, args.num_colors, args.soften, args.color_norm, args.color_jitter).cuda()
+    optimizer = optim.SGD(list(model.parameters()) + list(classifier.parameters()),
+                          lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 20, 1)
     # scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=args.lr,
     #                                                 steps_per_epoch=len(train_loader), epochs=args.epochs)
