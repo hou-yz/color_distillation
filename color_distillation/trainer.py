@@ -15,8 +15,8 @@ class BaseTrainer(object):
 
 
 class CNNTrainer(BaseTrainer):
-    def __init__(self, model, criterion, classifier=None, denormalizer=None, alpha=None, beta=None, gamma=None,
-                 visualize=False):
+    def __init__(self, model, criterion, num_colors, classifier=None, denormalizer=None,
+                 alpha=None, beta=None, gamma=None, visualize=False, sample_method=None):
         super(BaseTrainer, self).__init__()
         self.model = model
         self.criterion = criterion
@@ -27,6 +27,8 @@ class CNNTrainer(BaseTrainer):
         self.gamma = gamma
         self.reconsturction_loss = nn.MSELoss()
         self.visualize = visualize
+        self.sample_method = sample_method
+        self.num_colors = num_colors
         if classifier is not None:
             self.color_cnn = True
         else:
@@ -45,7 +47,7 @@ class CNNTrainer(BaseTrainer):
                 transformed_img, prob, color_palette = self.model(data)
                 # regularization
                 B, _, H, W = data.shape
-                prob_max, _ = torch.max(prob.view([B, prob.shape[1], -1]), dim=2)
+                prob_max, _ = torch.max(prob.view([B, self.num_colors, -1]), dim=2)
                 prob_mean = torch.mean(prob, dim=[2, 3])
                 avg_max = torch.mean(prob_max)
                 std_mean = torch.mean(prob_mean.std(dim=1))
@@ -60,7 +62,8 @@ class CNNTrainer(BaseTrainer):
             correct += pred.eq(target).sum().item()
             miss += target.shape[0] - pred.eq(target).sum().item()
             if self.color_cnn:
-                loss = self.criterion(output, target) + self.alpha * (1 - avg_max) + self.beta * color_var.mean() + \
+                loss = self.criterion(output, target) + self.alpha * np.log2(self.num_colors) * (1 - avg_max) + \
+                       self.beta * color_var.mean() + \
                        self.gamma * self.reconsturction_loss(data, transformed_img)
             else:
                 loss = self.criterion(output, target)
@@ -87,6 +90,27 @@ class CNNTrainer(BaseTrainer):
         return losses / len(data_loader), correct / (correct + miss)
 
     def test(self, test_loader):
+        def visualize(i):
+            og_img = self.denormalizer(data[i]).cpu().numpy().squeeze().transpose([1, 2, 0])
+            plt.imshow(og_img)
+            plt.show()
+            og_img = Image.fromarray((og_img * 255).astype('uint8')).resize((512, 512))
+            if self.color_cnn:
+                og_img.save('og_img.png')
+            else:
+                og_img.save(self.sample_method + '.png')
+            if self.color_cnn:
+                downsampled_img = self.denormalizer(transformed_img[i]).cpu().numpy().squeeze().transpose(
+                    [1, 2, 0])
+                plt.imshow(downsampled_img)
+                plt.show()
+                downsampled_img = Image.fromarray((downsampled_img * 255).astype('uint8')).resize((512, 512))
+                downsampled_img.save('colorcnn.png')
+                # index map
+                plt.imshow(M[i, 0].cpu().numpy(), cmap='Blues')
+                # plt.savefig("M.png", bbox_inches='tight')
+                plt.show()
+
         buffer_size_counter = 0
         number_of_colors = 0
         dataset_size = 0
@@ -114,24 +138,6 @@ class CNNTrainer(BaseTrainer):
                         downsampled_img.save(png_buffer, "PNG")
                         buffer_size_counter += png_buffer.getbuffer().nbytes
                         dataset_size += 1
-
-                    # plotting
-                    if self.visualize:
-                        plt.imshow(M[11, 0].cpu().numpy(), cmap='Blues')
-                        plt.savefig("M.png", bbox_inches='tight')
-                        plt.show()
-                        og_img = self.denormalizer(data[11]).cpu().numpy().squeeze().transpose([1, 2, 0])
-                        plt.imshow(og_img)
-                        plt.show()
-                        downsampled_img = self.denormalizer(transformed_img[11]).cpu().numpy().squeeze().transpose(
-                            [1, 2, 0])
-                        plt.imshow(downsampled_img)
-                        plt.show()
-                        og_img = Image.fromarray((og_img * 255).astype('uint8'))
-                        og_img.save('og_img.png')
-                        downsampled_img = Image.fromarray((downsampled_img * 255).astype('uint8'))
-                        downsampled_img.save('downsample_img.png')
-                    pass
                 else:
                     output = self.model(data)
             pred = torch.argmax(output, 1)
@@ -139,6 +145,9 @@ class CNNTrainer(BaseTrainer):
             miss += target.shape[0] - pred.eq(target).sum().item()
             loss = self.criterion(output, target)
             losses += loss.item()
+            # plotting
+            if self.visualize:
+                visualize(15)
 
         print('Test, Loss: {:.6f}, Prec: {:.1f}%, time: {:.1f}'.format(losses / (len(test_loader) + 1),
                                                                        100. * correct / (correct + miss),

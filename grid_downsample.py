@@ -14,14 +14,15 @@ from color_distillation.trainer import CNNTrainer
 from color_distillation.utils.draw_curve import draw_curve
 from color_distillation.utils.logging import Logger
 from color_distillation.utils.buffer_size_counter import BufferSizeCounter
+from color_distillation.utils.image_utils import img_color_denormalize
 
 
 def main():
     # settings
     parser = argparse.ArgumentParser(description='Grid-wise down sample')
     parser.add_argument('--num_colors', type=int, default=None, help='down sample ratio for area')
-    parser.add_argument('--sample_type', type=str, default=None, choices=['slic', 'mcut', 'octree','kmeans', 'jpeg'])
-    parser.add_argument('--jpeg_ratio', type=int, default=10)
+    parser.add_argument('--sample_type', type=str, default=None, choices=['slic', 'mcut', 'octree', 'kmeans', 'jpeg'])
+    parser.add_argument('--jpeg_ratio', type=int, default=None)
     parser.add_argument('--train', action='store_true', default=False)
     parser.add_argument('-d', '--dataset', type=str, default='cifar10',
                         choices=['cifar10', 'cifar100', 'stl10', 'svhn', 'imagenet', 'tiny-imagenet-200'])
@@ -85,6 +86,7 @@ def main():
         sampled_train_trans = T.Compose(sample_trans + [T.ToTensor(), normalize, ])
         og_test_trans = T.Compose(og_trans + [T.ToTensor(), normalize, ])
         sampled_test_trans = T.Compose(sample_trans + [T.ToTensor(), normalize, ])
+        denormalizer = img_color_denormalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
 
         sampled_train_set = datasets.SVHN(data_path, split='train', download=True, transform=sampled_train_trans)
         og_test_set = datasets.SVHN(data_path, split='test', download=True, transform=og_test_trans)
@@ -97,6 +99,7 @@ def main():
                                                         T.RandomHorizontalFlip(), T.ToTensor(), normalize, ])
         og_test_trans = T.Compose(og_trans + [T.ToTensor(), normalize, ])
         sampled_test_trans = T.Compose(sample_trans + [T.ToTensor(), normalize, ])
+        denormalizer = img_color_denormalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
 
         if args.dataset == 'cifar10':
             sampled_train_set = datasets.CIFAR10(data_path, train=True, download=True, transform=sampled_train_trans)
@@ -114,18 +117,22 @@ def main():
                                                         T.ToTensor(), normalize, ])
         og_test_trans = T.Compose(og_trans + [T.Resize(256), T.CenterCrop(224), T.ToTensor(), normalize, ])
         sampled_test_trans = T.Compose(sample_trans + [T.Resize(256), T.CenterCrop(224), T.ToTensor(), normalize, ])
+        denormalizer = img_color_denormalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
 
         sampled_train_set = datasets.ImageNet(data_path, split='train', transform=sampled_train_trans, )
         og_test_set = datasets.ImageNet(data_path, split='val', transform=og_test_trans)
         sampled_test_set = datasets.ImageNet(data_path, split='val', transform=sampled_test_trans, )
     elif args.dataset == 'stl10':
         num_class = 10
+        # smaller batch size
+        args.batch_size = 32
 
         normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         sampled_train_trans = T.Compose(sample_trans + [T.RandomCrop(96, padding=12),
                                                         T.RandomHorizontalFlip(), T.ToTensor(), normalize, ])
         og_test_trans = T.Compose(og_trans + [T.ToTensor(), normalize, ])
         sampled_test_trans = T.Compose(sample_trans + [T.ToTensor(), normalize, ])
+        denormalizer = img_color_denormalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
 
         sampled_train_set = datasets.STL10(data_path, split='train', download=True, transform=sampled_train_trans)
         og_test_set = datasets.STL10(data_path, split='test', download=True, transform=og_test_trans)
@@ -138,6 +145,7 @@ def main():
                                                         T.ToTensor(), normalize, ])
         og_test_trans = T.Compose(og_trans + [T.ToTensor(), normalize, ])
         sampled_test_trans = T.Compose(sample_trans + [T.ToTensor(), normalize, ])
+        denormalizer = img_color_denormalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
 
         sampled_train_set = datasets.ImageFolder(data_path + '/train', transform=sampled_train_trans, )
         og_test_set = datasets.ImageFolder(data_path + '/val', transform=og_test_trans)
@@ -175,7 +183,8 @@ def main():
     masked_test_loss_s = []
     masked_test_prec_s = []
 
-    trainer = CNNTrainer(model, nn.CrossEntropyLoss())
+    trainer = CNNTrainer(model, nn.CrossEntropyLoss(), args.num_colors,
+                         denormalizer=denormalizer, sample_method=args.sample_type)
 
     # learn
     if args.train:

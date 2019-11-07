@@ -18,7 +18,7 @@ from color_distillation.models.color_cnn import ColorCNN
 from color_distillation.trainer import CNNTrainer
 from color_distillation.utils.draw_curve import draw_curve
 from color_distillation.utils.logging import Logger
-from color_distillation.utils.image_utils import img_color_denormalize, create_coord_map
+from color_distillation.utils.image_utils import img_color_denormalize
 
 
 def main():
@@ -95,11 +95,13 @@ def main():
         test_trans = T.Compose([T.Resize(256), T.CenterCrop(224), T.ToTensor(), normalize, ])
         denormalizer = img_color_denormalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
 
-        train_set = datasets.ImageNet(data_path, split='train', transform=train_trans, )
+        train_set = datasets.ImageNet(data_path, split='train', transform=train_trans)
         test_set = datasets.ImageNet(data_path, split='val', transform=test_trans)
     elif args.dataset == 'stl10':
         H, W, C = 96, 96, 3
         num_class = 10
+        # smaller batch size
+        args.batch_size = 32
 
         normalize = T.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
         train_trans = T.Compose([T.RandomCrop(96, padding=12), T.RandomHorizontalFlip(), T.ToTensor(), normalize, ])
@@ -117,7 +119,7 @@ def main():
         test_trans = T.Compose([T.ToTensor(), normalize, ])
         denormalizer = img_color_denormalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225))
 
-        train_set = datasets.ImageFolder(data_path + '/train', transform=train_trans, )
+        train_set = datasets.ImageFolder(data_path + '/train', transform=train_trans)
         test_set = datasets.ImageFolder(data_path + '/val', transform=test_trans)
     else:
         raise Exception
@@ -171,7 +173,7 @@ def main():
     og_test_loss_s = []
     og_test_prec_s = []
 
-    trainer = CNNTrainer(model, criterion, classifier, denormalizer, args.alpha, args.beta, args.gamma)
+    trainer = CNNTrainer(model, criterion, args.num_colors, classifier, denormalizer, args.alpha, args.beta, args.gamma)
 
     # learn
     if args.resume is None:
