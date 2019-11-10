@@ -28,7 +28,7 @@ def main():
     parser.add_argument('--alpha', type=float, default=1, help='multiplier of regularization terms')
     parser.add_argument('--beta', type=float, default=0, help='multiplier of regularization terms')
     parser.add_argument('--gamma', type=float, default=0, help='multiplier of reconstruction loss')
-    parser.add_argument('--color_jitter', type=float, default=2)
+    parser.add_argument('--color_jitter', type=float, default=1)
     parser.add_argument('--color_norm', type=float, default=4, help='normalizer for color palette')
     parser.add_argument('--label_smooth', type=float, default=0.0)
     parser.add_argument('--soften', type=float, default=1, help='soften coefficient for softmax')
@@ -46,6 +46,7 @@ def main():
                         help='how many batches to wait before logging training status')
     parser.add_argument('--resume', type=str, default=None)
     parser.add_argument('--train_classifier', action='store_true')
+    parser.add_argument('--visualize', action='store_true')
     parser.add_argument('--seed', type=int, default=None, help='random seed (default: None)')
     args = parser.parse_args()
 
@@ -123,6 +124,11 @@ def main():
         test_set = datasets.ImageFolder(data_path + '/val', transform=test_trans)
     else:
         raise Exception
+
+    # network specific setting
+    if args.arch == 'alexnet':
+        if 'cifar' not in args.dataset:
+            args.color_norm = 1
 
     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args.batch_size, shuffle=True,
                                                num_workers=args.num_workers, pin_memory=True)
@@ -202,7 +208,7 @@ def main():
         model.load_state_dict(torch.load(resume_fname))
         model.eval()
         print('Test loaded model...')
-        trainer.test(test_loader)
+        trainer.test(test_loader, args.visualize)
 
 
 if __name__ == '__main__':

@@ -16,7 +16,7 @@ class BaseTrainer(object):
 
 class CNNTrainer(BaseTrainer):
     def __init__(self, model, criterion, num_colors, classifier=None, denormalizer=None,
-                 alpha=None, beta=None, gamma=None, visualize=False, sample_method=None):
+                 alpha=None, beta=None, gamma=None, sample_method=None):
         super(BaseTrainer, self).__init__()
         self.model = model
         self.criterion = criterion
@@ -26,7 +26,6 @@ class CNNTrainer(BaseTrainer):
         self.beta = beta
         self.gamma = gamma
         self.reconsturction_loss = nn.MSELoss()
-        self.visualize = visualize
         self.sample_method = sample_method
         self.num_colors = num_colors
         if classifier is not None:
@@ -89,8 +88,13 @@ class CNNTrainer(BaseTrainer):
 
         return losses / len(data_loader), correct / (correct + miss)
 
-    def test(self, test_loader):
-        def visualize(i):
+    def test(self, test_loader, visualize=False):
+        activation = {}
+
+        def activation_hook(self, input, output):
+            activation[0] = output.cpu().detach().numpy()
+
+        def visualize_img(i):
             og_img = self.denormalizer(data[i]).cpu().numpy().squeeze().transpose([1, 2, 0])
             plt.imshow(og_img)
             plt.show()
@@ -106,10 +110,13 @@ class CNNTrainer(BaseTrainer):
                 plt.show()
                 downsampled_img = Image.fromarray((downsampled_img * 255).astype('uint8')).resize((512, 512))
                 downsampled_img.save('colorcnn.png')
-                # index map
-                plt.imshow(M[i, 0].cpu().numpy(), cmap='Blues')
-                # plt.savefig("M.png", bbox_inches='tight')
+
+                plt.imshow(np.linalg.norm(activation[0][i], axis=0), cmap='viridis')
                 plt.show()
+                # index map
+                # plt.imshow(M[i, 0].cpu().numpy(), cmap='Blues')
+                # plt.savefig("M.png", bbox_inches='tight')
+                # plt.show()
 
         buffer_size_counter = 0
         number_of_colors = 0
@@ -123,6 +130,8 @@ class CNNTrainer(BaseTrainer):
             data, target = data.cuda(), target.cuda()
             with torch.no_grad():
                 if self.color_cnn:
+                    if visualize:
+                        self.model.base.register_forward_hook(activation_hook)
                     B, C, H, W = data.shape
                     transformed_img, prob, _ = self.model(data, training=False)
                     output = self.classifier(transformed_img)
@@ -146,8 +155,8 @@ class CNNTrainer(BaseTrainer):
             loss = self.criterion(output, target)
             losses += loss.item()
             # plotting
-            if self.visualize:
-                visualize(15)
+            if visualize:
+                visualize_img(26)
 
         print('Test, Loss: {:.6f}, Prec: {:.1f}%, time: {:.1f}'.format(losses / (len(test_loader) + 1),
                                                                        100. * correct / (correct + miss),
