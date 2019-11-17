@@ -14,8 +14,8 @@ class VGG(nn.Module):
     def __init__(self, vgg_name, out_channel):
         super(VGG, self).__init__()
         self.features = self._make_layers(3, cfg[vgg_name])
-        self.features[-1] = nn.AdaptiveMaxPool2d((1, 1))  # remove last pooling layer
-        # self.global_average_pooling = nn.AdaptiveAvgPool2d((1, 1))
+        self.features[-1] = nn.Sequential()  # remove last pooling layer
+        self.global_average_pooling = nn.AdaptiveAvgPool2d((1, 1))
         self.has_classifier = out_channel != 0
         if self.has_classifier:
             self.classifier = nn.Linear(512, out_channel)
@@ -24,7 +24,7 @@ class VGG(nn.Module):
 
     def forward(self, x):
         out = self.features(x)
-        # out = self.global_average_pooling(out)
+        out = self.global_average_pooling(out)
         out = out.view(out.size(0), -1)
         if self.has_classifier:
             out = self.classifier(out)

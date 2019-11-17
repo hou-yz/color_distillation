@@ -16,6 +16,7 @@ from color_distillation import models
 from color_distillation.loss.label_smooth import LSR_loss
 from color_distillation.models.color_cnn import ColorCNN
 from color_distillation.trainer import CNNTrainer
+from color_distillation.utils.load_checkpoint import checkpoint_loader
 from color_distillation.utils.draw_curve import draw_curve
 from color_distillation.utils.logging import Logger
 from color_distillation.utils.image_utils import img_color_denormalize
@@ -33,7 +34,7 @@ def main():
     parser.add_argument('--label_smooth', type=float, default=0.0)
     parser.add_argument('--soften', type=float, default=1, help='soften coefficient for softmax')
     parser.add_argument('-d', '--dataset', type=str, default='cifar10',
-                        choices=['cifar10', 'cifar100', 'stl10', 'svhn', 'imagenet', 'tiny-imagenet-200'])
+                        choices=['cifar10', 'cifar100', 'stl10', 'svhn', 'imagenet', 'tiny200'])
     parser.add_argument('-a', '--arch', type=str, default='vgg16', choices=models.names())
     parser.add_argument('-j', '--num_workers', type=int, default=4)
     parser.add_argument('-b', '--batch_size', type=int, default=128, metavar='N',
@@ -44,6 +45,7 @@ def main():
     parser.add_argument('--momentum', type=float, default=0.5, metavar='M', help='SGD momentum (default: 0.5)')
     parser.add_argument('--log_interval', type=int, default=100, metavar='N',
                         help='how many batches to wait before logging training status')
+    parser.add_argument('--backbone', type=str, default='unet', choices=['unet', 'dncnn'])
     parser.add_argument('--resume', type=str, default=None)
     parser.add_argument('--train_classifier', action='store_true')
     parser.add_argument('--visualize', action='store_true')
@@ -111,7 +113,7 @@ def main():
 
         train_set = datasets.STL10(data_path, split='train', download=True, transform=train_trans)
         test_set = datasets.STL10(data_path, split='test', download=True, transform=test_trans)
-    elif args.dataset == 'tiny-imagenet-200':
+    elif args.dataset == 'tiny200':
         H, W, C = 64, 64, 3
         num_class = 200
 
@@ -159,7 +161,7 @@ def main():
         for param in classifier.parameters():
             param.requires_grad = False
 
-    model = ColorCNN(C, args.num_colors, args.soften, args.color_norm, args.color_jitter).cuda()
+    model = ColorCNN(args.backbone, args.num_colors, args.soften, args.color_norm, args.color_jitter).cuda()
     optimizer = optim.SGD(list(model.parameters()) + list(classifier.parameters()),
                           lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, 20, 1)

@@ -6,6 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from PIL import Image
+import cv2
 from io import BytesIO
 
 
@@ -30,6 +31,7 @@ class CNNTrainer(BaseTrainer):
         self.num_colors = num_colors
         if classifier is not None:
             self.color_cnn = True
+            self.sample_method = 'colorcnn'
         else:
             self.color_cnn = False
 
@@ -91,19 +93,20 @@ class CNNTrainer(BaseTrainer):
     def test(self, test_loader, visualize=False):
         activation = {}
 
-        def activation_hook(self, input, output):
-            activation[0] = output.cpu().detach().numpy()
+        def classifier_activation_hook(self, input, output):
+            activation['classifier'] = output.cpu().detach().numpy()
+
+        def auto_encoder_activation_hook(self, input, output):
+            activation['auto_encoder'] = output.cpu().detach().numpy()
 
         def visualize_img(i):
-            og_img = self.denormalizer(data[i]).cpu().numpy().squeeze().transpose([1, 2, 0])
-            plt.imshow(og_img)
-            plt.show()
-            og_img = Image.fromarray((og_img * 255).astype('uint8')).resize((512, 512))
             if self.color_cnn:
+                og_img = self.denormalizer(data[i]).cpu().numpy().squeeze().transpose([1, 2, 0])
+                plt.imshow(og_img)
+                plt.show()
+                og_img = Image.fromarray((og_img * 255).astype('uint8')).resize((512, 512))
                 og_img.save('og_img.png')
-            else:
-                og_img.save(self.sample_method + '.png')
-            if self.color_cnn:
+
                 downsampled_img = self.denormalizer(transformed_img[i]).cpu().numpy().squeeze().transpose(
                     [1, 2, 0])
                 plt.imshow(downsampled_img)
@@ -111,12 +114,39 @@ class CNNTrainer(BaseTrainer):
                 downsampled_img = Image.fromarray((downsampled_img * 255).astype('uint8')).resize((512, 512))
                 downsampled_img.save('colorcnn.png')
 
-                plt.imshow(np.linalg.norm(activation[0][i], axis=0), cmap='viridis')
+                fig = plt.figure(frameon=False)
+                fig.set_size_inches(2, 2)
+                ax = plt.Axes(fig, [0., 0., 1., 1.])
+                ax.set_axis_off()
+                fig.add_axes(ax)
+                plt.imshow(np.linalg.norm(activation['auto_encoder'][i], axis=0), cmap='viridis')
+                plt.savefig('auto_encoder.png')
                 plt.show()
                 # index map
                 # plt.imshow(M[i, 0].cpu().numpy(), cmap='Blues')
                 # plt.savefig("M.png", bbox_inches='tight')
                 # plt.show()
+            else:
+                downsampled_img = self.denormalizer(data[i]).cpu().numpy().squeeze().transpose([1, 2, 0])
+                plt.imshow(downsampled_img)
+                plt.show()
+                downsampled_img = Image.fromarray((downsampled_img * 255).astype('uint8')).resize((512, 512))
+                downsampled_img.save('og_img.png')
+                downsampled_img.save(self.sample_method + '.png')
+            cam_map = np.sum(activation['classifier'][i] * weight_softmax[pred[i].item()].reshape((-1, 1, 1)), axis=0)
+            cam_map = cam_map - np.min(cam_map)
+            cam_map = cam_map / np.max(cam_map)
+            cam_map = np.uint8(255 * cam_map)
+            cam_map = cv2.resize(cam_map, (downsampled_img.size))
+            heatmap = cv2.applyColorMap(cam_map, cv2.COLORMAP_JET)
+            downsampled_img = cv2.cvtColor(np.asarray(downsampled_img), cv2.COLOR_RGB2BGR)
+            cam_result = np.uint8(heatmap * 0.3 + downsampled_img * 0.5)
+            cv2.imwrite(self.sample_method + '_cam.jpg', cam_result)
+            plt.imshow(cv2.cvtColor(cam_result, cv2.COLOR_BGR2RGB))
+            plt.show()
+            # ax.imshow(cam_map, cmap='viridis', aspect='auto')
+            # fig.savefig("activation.png", )
+            # fig.show()
 
         buffer_size_counter = 0
         number_of_colors = 0
@@ -126,12 +156,28 @@ class CNNTrainer(BaseTrainer):
         correct = 0
         miss = 0
         t0 = time.time()
+
+        if visualize:
+            if self.color_cnn:
+                self.classifier.features.register_forward_hook(classifier_activation_hook)
+                self.model.base.register_forward_hook(auto_encoder_activation_hook)
+
+                classifier_layer = self.classifier.classifier
+                if isinstance(classifier_layer, nn.Sequential):
+                    classifier_layer = classifier_layer[-1]
+                weight_softmax = classifier_layer.weight.detach().cpu().numpy()
+            else:
+                self.model.features.register_forward_hook(classifier_activation_hook)
+
+                classifier_layer = self.model.classifier
+                if isinstance(classifier_layer, nn.Sequential):
+                    classifier_layer = classifier_layer[-1]
+                weight_softmax = classifier_layer.weight.detach().cpu().numpy()
+
         for batch_idx, (data, target) in enumerate(test_loader):
             data, target = data.cuda(), target.cuda()
             with torch.no_grad():
                 if self.color_cnn:
-                    if visualize:
-                        self.model.base.register_forward_hook(activation_hook)
                     B, C, H, W = data.shape
                     transformed_img, prob, _ = self.model(data, training=False)
                     output = self.classifier(transformed_img)
@@ -156,7 +202,9 @@ class CNNTrainer(BaseTrainer):
             losses += loss.item()
             # plotting
             if visualize:
-                visualize_img(26)
+                if batch_idx == 2:
+                    visualize_img(28)
+                    break
 
         print('Test, Loss: {:.6f}, Prec: {:.1f}%, time: {:.1f}'.format(losses / (len(test_loader) + 1),
                                                                        100. * correct / (correct + miss),

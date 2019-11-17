@@ -7,13 +7,13 @@ from color_distillation.models.unet import UNet
 
 
 class ColorCNN(nn.Module):
-    def __init__(self, in_channel, num_colors, soften=1, color_norm=1, color_jitter=0):
+    def __init__(self, arch, num_colors, soften=1, color_norm=1, color_jitter=0):
         super().__init__()
         self.num_colors = num_colors
         self.soften = soften
         self.color_norm = color_norm
         self.color_jitter = color_jitter
-        self.base = UNet(in_channel)
+        self.base = UNet(3) if arch == 'unet' else DnCNN(3)
         self.color_mask = nn.Sequential(nn.Conv2d(self.base.out_channel, 256, 1), nn.ReLU(),
                                         nn.Conv2d(256, num_colors, 1, bias=False))
         self.mask_softmax = nn.Softmax2d()
