@@ -13,7 +13,7 @@ from color_distillation import models
 from color_distillation.trainer import CNNTrainer
 from color_distillation.utils.load_checkpoint import checkpoint_loader
 from color_distillation.utils.draw_curve import draw_curve
-from color_distillation.utils.logging import Logger
+from color_distillation.utils.logger import Logger
 from color_distillation.utils.buffer_size_counter import BufferSizeCounter
 from color_distillation.utils.image_utils import img_color_denormalize
 
