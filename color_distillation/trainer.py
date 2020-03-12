@@ -1,9 +1,7 @@
 import time
-import copy
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from PIL import Image
 import cv2

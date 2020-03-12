@@ -1,12 +1,9 @@
-import io
-import pandas as pd
 import glob
 import os
 from shutil import move
-from os.path import join
-from os import listdir, rmdir
+from os import rmdir
 
-target_folder = os.path.expanduser('~/Data/tiny-imagenet-200/val/')
+target_folder = os.path.expanduser('~/Data/tiny200/val/')
 
 val_dict = {}
 with open(target_folder + 'val_annotations.txt', 'r') as f:

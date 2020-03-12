@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.functional as F
 from color_distillation.models.dncnn import DnCNN
 from color_distillation.models.unet import UNet
 

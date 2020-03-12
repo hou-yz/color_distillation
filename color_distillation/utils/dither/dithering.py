@@ -1,11 +1,20 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+:mod:`diffusion`
+=======================
+.. moduleauthor:: hbldh <henrik.blidh@swedwise.com>
+Created on 2016-09-12, 11:34
+"""
+
 import numpy as np
 
 _DIFFUSION_MAPS = {
     'floyd-steinberg': (
-        (1, 0,  7 / 16),
+        (1, 0, 7 / 16),
         (-1, 1, 3 / 16),
-        (0, 1,  5 / 16),
-        (1, 1,  1 / 16)
+        (0, 1, 5 / 16),
+        (1, 1, 1 / 16)
     ),
 }
 

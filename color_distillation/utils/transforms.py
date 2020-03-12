@@ -1,6 +1,5 @@
 from PIL import Image
 from io import BytesIO
-import matplotlib.pyplot as plt
 from color_distillation.utils.dither.palette import Palette
 from color_distillation.utils.dither.dithering import error_diffusion_dithering
 from torchvision.transforms import *
