@@ -2,6 +2,7 @@ import time
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import matplotlib.pyplot as plt
 from PIL import Image
 import cv2
@@ -129,7 +130,6 @@ class CNNTrainer(BaseTrainer):
                 plt.imshow(downsampled_img)
                 plt.show()
                 downsampled_img = Image.fromarray((downsampled_img * 255).astype('uint8')).resize((512, 512))
-                downsampled_img.save('og_img.png')
                 downsampled_img.save(self.sample_method + '.png')
             cam_map = np.sum(activation['classifier'][i] * weight_softmax[pred[i].item()].reshape((-1, 1, 1)), axis=0)
             cam_map = cam_map - np.min(cam_map)
@@ -139,6 +139,11 @@ class CNNTrainer(BaseTrainer):
             heatmap = cv2.applyColorMap(cam_map, cv2.COLORMAP_JET)
             downsampled_img = cv2.cvtColor(np.asarray(downsampled_img), cv2.COLOR_RGB2BGR)
             cam_result = np.uint8(heatmap * 0.3 + downsampled_img * 0.5)
+            cam_result = cv2.putText(cam_result, '{:.1f}%, {}'.format(
+                100 * F.softmax(output, dim=1)[i, target[i]].item(),
+                'Success' if pred.eq(target)[i].item() else 'Failure'),
+                                     (0, 50), cv2.FONT_HERSHEY_SIMPLEX, 2,
+                                     (0, 255, 0) if pred.eq(target)[i].item() else (0, 0, 255), 2, cv2.LINE_AA)
             cv2.imwrite(self.sample_method + '_cam.jpg', cam_result)
             plt.imshow(cv2.cvtColor(cam_result, cv2.COLOR_BGR2RGB))
             plt.show()
