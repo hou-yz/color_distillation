@@ -1,4 +1,4 @@
-# Learning to Structure an Image with Few Colors [[Website](https://hou-yz.github.io/publication/2019-Learning%20to%20Structure%20an%20Image%20with%20Few%20Colors)]
+# Learning to Structure an Image with Few Colors [[Website](https://hou-yz.github.io/publication/2019-Learning%20to%20Structure%20an%20Image%20with%20Few%20Colors)] [[arXiv](https://arxiv.org/abs/2003.07848)]
 
 ```
 @article{hou2020learning,
