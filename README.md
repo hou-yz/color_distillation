@@ -1,17 +1,18 @@
-# Learning to Structure an Image with Few Colors [[Website](https://hou-yz.github.io/publication/2019-Learning%20to%20Structure%20an%20Image%20with%20Few%20Colors)] [[arXiv](https://arxiv.org/abs/2003.07848)]
+# Learning to Structure an Image with Few Colors [[Website](https://hou-yz.github.io/publication/2019-cvpr2020-colorcnn)] [[arXiv](https://arxiv.org/abs/2003.07848)]
 
 ```
-@article{hou2020learning,
+@inproceedings{hou2020learning,
   title={Learning to Structure an Image with Few Colors},
   author={Hou, Yunzhong and Zheng, Liang and Gould, Stephen},
-  journal={CVPR},
+  booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition},
+  pages={10116--10125},
   year={2020}
 }
 ```
 
 
 ## Overview
-We release the PyTorch code for ColorCNN, a newly introduced architecture in our paper *[Learning to Structure an Image with Few Colors](https://hou-yz.github.io/publication/2019-Learning%20to%20Structure%20an%20Image%20with%20Few%20Colors)*.
+We release the PyTorch code for ColorCNN, a newly introduced architecture in our paper *[Learning to Structure an Image with Few Colors](https://hou-yz.github.io/publication/2019-cvpr2020-colorcnn)*.
 ![system overview](https://hou-yz.github.io/images/ColorCNN_system.png "System overview of image color quantization with ColorCNN.")
  
 ## Content
