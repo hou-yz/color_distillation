@@ -27,7 +27,7 @@ We release the PyTorch code for ColorCNN, a newly introduced architecture in our
 ## Dependencies
 This code uses the following libraries
 - python 3.7+
-- pytorch 1.4+ & tochvision
+- pytorch 1.4+ & torchvision
 - numpy
 - matplotlib
 - pillow
